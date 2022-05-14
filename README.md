@@ -1,6 +1,6 @@
 ## xpublish_opendap
 
-[![Build Status](https://travis-ci.com/ioos/ioos-python-package-skeleton.svg?branch=master)](https://travis-ci.com/ioos/ioos-python-package-skeleton)
+[![Tests](https://github.com/gulfofmaine/xpublish-opendap/actions/workflows/tests.yml/badge.svg)](https://github.com/gulfofmaine/xpublish-opendap/actions/workflows/tests.yml)
 
 Quick description
 
@@ -8,7 +8,7 @@ Quick description
 
 URLs for the docs and code.
 
-### Installation
+### Installation - not really, install from Github instead
 
 For `conda` users you can
 
@@ -25,10 +25,22 @@ pip install xpublish_opendap
 ### Example
 
 ```python
-from xpublish_opendap import xpublish_opendap
+import xarray as xr
+import xpublish
+from xpublish.routers import base_router, zarr_router
+from xpublish_opendap import dap_router
 
 
-xpublish_opendap.meaning_of_life_url()
+ds = xr.open_dataset("dataset.nc")
+
+rest = xpublish.Rest(
+    ds,
+    routers=[
+        (base_router, {"tags": ["info"]}),
+        (dap_router, {"tags": ["opendap"], "prefix": "/dap"}),
+        (zarr_router, {"tags": ["zarr"], "prefix": "/zarr"})
+    ]
+)
 ```
 
 ## Get in touch
