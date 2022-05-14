@@ -2,6 +2,7 @@
 Convert xarray.Datasets to OpenDAP datasets
 """
 import logging
+from typing import Dict
 
 import numpy as np
 import opendap_protocol as dap
@@ -46,7 +47,7 @@ def dap_dimension(da: xr.DataArray) -> dap.Array:
     return dim
 
 
-def dap_grid(da: xr.DataArray, dims: dict[str, dap.Array]) -> dap.Grid:
+def dap_grid(da: xr.DataArray, dims: Dict[str, dap.Array]) -> dap.Grid:
     """Transform an xarray DataArray into a DAP Grid"""
     data_array = dap.Grid(
         name=da.name,
@@ -71,10 +72,9 @@ def dap_dataset(ds: xr.Dataset, name: str) -> dap.Dataset:
 
     dataset.append(*dims.values())
 
-    for var in ds.variables:
-        if var not in ds.dims:
-            data_array = dap_grid(ds[var], dims)
-            dataset.append(data_array)
+    for var in ds.data_vars:
+        data_array = dap_grid(ds[var], dims)
+        dataset.append(data_array)
 
     for k, v in ds.attrs.items():
         dataset.append(dap.Attribute(name=k, value=v, dtype=dap.String))

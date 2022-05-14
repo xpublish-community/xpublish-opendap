@@ -1,7 +1,6 @@
-import numpy as np
 import pytest
-from fastapi.testclient import TestClient
 import xpublish
+from fastapi.testclient import TestClient
 
 from xpublish_opendap import dap_router
 
@@ -63,4 +62,3 @@ def test_das_response(dap_client):
     assert (
         'String title "4x daily NMC reanalysis (1948)"' in content
     ), "Global attributes are returned"
-
