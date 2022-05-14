@@ -6,10 +6,10 @@ Package Guidelines
 
    how2package4ioos.md
 
-ioos_pkg_skeleton
+xpublish_opendap
 =================
 
-What is ioos_pkg_skeleton?
+What is xpublish_opendap?
 --------------------------
 
 The best module ever written!
@@ -20,7 +20,7 @@ The best module ever written!
    :caption: Contents:
 
    tutorial.ipynb
-   ioos_pkg_skeleton
+   xpublish_opendap
 
 Indices and tables
 ==================

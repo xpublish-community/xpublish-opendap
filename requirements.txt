@@ -1,2 +1,3 @@
-numpy
-requests
+opendap-protocol<1.2.0
+xarray
+xpublish<=0.1.0

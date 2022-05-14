@@ -21,12 +21,11 @@ Almost all python packages are structure as following:
 | | |-_static
 | |-build
 |-tests
-|-ioos_pkg_skeleton
+|-xpublish_opendap
 |-notebooks
 |-README.md
 |-LICENSE.txt
 ```
-
 
 Sometimes the `tests` folder goes inside the actual module.
 We recommend that only if shipping the tests is important, e.g compiled modules.
@@ -40,7 +39,6 @@ Markdown is a good format because it renders automatically on GitHub and is supp
 
 While IOOS does not recommend any particular license we prefer projects with OSI approved license,
 the most common one is BSD-3-Clause.
-
 
 ## PEP 517/518
 
@@ -70,7 +68,6 @@ The main advantages of using these PEPs together are:
   - all should support pip installs.
 - ensure that setup dependencies will be available at build time.
 
-
 [This blog post](https://medium.com/@grassfedcode/pep-517-and-518-in-plain-english-47208ca8b7a6) contains a nice summary of these PEPs.
 
 For IOOS packages we recommend to keep a bare bones `setup.py`,
@@ -86,7 +83,7 @@ from setuptools import setup
 
 setup(
     use_scm_version={
-        "write_to": "ioos_pkg_skeleton/_version.py",
+        "write_to": "xpublish_opendap/_version.py",
         "write_to_template": '__version__ = "{version}"',
         "tag_regex": r"^(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$",
     }
@@ -112,7 +109,7 @@ The former will have the package metadata and tools configuration while the latt
 
 ```cfg
 [metadata]
-name = ioos_pkg_skeleton
+name = xpublish_opendap
 description = My Awesome module
 author = AUTHOR NAME
 author_email = AUTHOR@EMAIL.COM
@@ -161,7 +158,7 @@ ignore =
 max-line-length = 105
 select = C,E,F,W,B,B950
 ignore = E203, E501, W503
-exclude = ioos_pkg_skeleton/_version.py
+exclude = xpublish_opendap/_version.py
 ```
 
 The metadata and options fields are almost the same information that used to go in the `setup.py`.
@@ -178,13 +175,12 @@ Most of the problems we find with published tarballs is the lack of a required f
 That is we why recommend `check-manifest` to help you write your `MANIFEST.in` file.
 Here is an example that covers most cases:
 
-
 ```
 include *.txt
 include LICENSE # Please consider the Windows users and use .txt
 include README.md
 
-recursive-include ioos_pkg_skeleton *.py
+recursive-include xpublish_opendap *.py
 ```
 
 ## Do we still need a `requirements.txt` file?
@@ -284,18 +280,18 @@ install:
 
 script:
   - if [[ $TRAVIS_JOB_NAME == python-* ]]; then
-      cp -r tests/ /tmp ;
-      pushd /tmp && pytest -n 2 -rxs --cov=ioos_pkg_skeleton tests && popd ;
+    cp -r tests/ /tmp ;
+    pushd /tmp && pytest -n 2 -rxs --cov=xpublish_opendap tests && popd ;
     fi
 
   - if [[ $TRAVIS_JOB_NAME == 'tarball' ]]; then
-      pip wheel . -w dist --no-deps ;
-      check-manifest --verbose ;
-      twine check dist/* ;
+    pip wheel . -w dist --no-deps ;
+    check-manifest --verbose ;
+    twine check dist/* ;
     fi
 
   - if [[ $TRAVIS_JOB_NAME == 'coding_standards' ]]; then
-      pytest --flake8 -m flake8 ;
+    pytest --flake8 -m flake8 ;
     fi
 
   - |
@@ -312,7 +308,6 @@ script:
         python -m doctr deploy --build-tags --key-path github_deploy_key.enc --built-docs docs/_build/html .
       fi
     fi
-
 ```
 
 This configuration sets a test matrix with multiple python versions, tarball tests, coding standards, and documentation builds.
@@ -344,55 +339,75 @@ We will leave as an exercise to the reader to determine which ones are best for 
 
 We do recommend `black` and `isort` for big projects with multiple contributors though because them help PR reviews by removing the code style from the equation.
 
-
 ```yaml
 repos:
-- repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v3.1.0
-  hooks:
-    - id: trailing-whitespace
-      exclude: tests/data
-    - id: check-ast
-    - id: debug-statements
-    - id: end-of-file-fixer
-    - id: check-docstring-first
-    - id: check-added-large-files
-    - id: requirements-txt-fixer
-    - id: file-contents-sorter
-      files: requirements-dev.txt
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v3.1.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: tests/data
+      - id: check-ast
+      - id: debug-statements
+      - id: end-of-file-fixer
+      - id: check-docstring-first
+      - id: check-added-large-files
+      - id: requirements-txt-fixer
+      - id: file-contents-sorter
+        files: requirements-dev.txt
 
-- repo: https://gitlab.com/pycqa/flake8
-  rev: 3.7.9
-  hooks:
-    - id: flake8
-      exclude: docs/source/conf.py
-      args: [--max-line-length=105, --ignore=E203,E501,W503, --select=select=C,E,F,W,B,B950]
+  - repo: https://gitlab.com/pycqa/flake8
+    rev: 3.7.9
+    hooks:
+      - id: flake8
+        exclude: docs/source/conf.py
+        args:
+          [
+            --max-line-length=105,
+            --ignore=E203,
+            E501,
+            W503,
+            --select=select=C,
+            E,
+            F,
+            W,
+            B,
+            B950,
+          ]
 
-- repo: https://github.com/pre-commit/mirrors-isort
-  rev: v4.3.21
-  hooks:
-  - id: isort
-    additional_dependencies: [toml]
-    args: [--project=ioos_pkg_skeleton, --multi-line=3, --lines-after-imports=2, --lines-between-types=1, --trailing-comma, --force-grid-wrap=0, --use-parentheses, --line-width=88]
+  - repo: https://github.com/pre-commit/mirrors-isort
+    rev: v4.3.21
+    hooks:
+      - id: isort
+        additional_dependencies: [toml]
+        args:
+          [
+            --project=xpublish_opendap,
+            --multi-line=3,
+            --lines-after-imports=2,
+            --lines-between-types=1,
+            --trailing-comma,
+            --force-grid-wrap=0,
+            --use-parentheses,
+            --line-width=88,
+          ]
 
-- repo: https://github.com/asottile/seed-isort-config
-  rev: v2.1.1
-  hooks:
-    - id: seed-isort-config
+  - repo: https://github.com/asottile/seed-isort-config
+    rev: v2.1.1
+    hooks:
+      - id: seed-isort-config
 
-- repo: https://github.com/psf/black
-  rev: stable
-  hooks:
-  - id: black
-    language_version: python3
+  - repo: https://github.com/psf/black
+    rev: stable
+    hooks:
+      - id: black
+        language_version: python3
 
-- repo: https://github.com/pre-commit/mirrors-mypy
-  rev: v0.770
-  hooks:
-  - id: mypy
-    exclude: docs/source/conf.py
-    args: [--ignore-missing-imports]
-
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v0.770
+    hooks:
+      - id: mypy
+        exclude: docs/source/conf.py
+        args: [--ignore-missing-imports]
 ```
 
 In order to run them in every commit one must install them with:
@@ -410,7 +425,7 @@ pre-commit run --all-files
 and ignoring it in a commit if you don't want it to run:
 
 ```
-git commit ioos_pkg_skeleton/some-dot-pwhy.py --no-verify
+git commit xpublish_opendap/some-dot-pwhy.py --no-verify
 ```
 
 ## Github Actions
@@ -431,15 +446,15 @@ jobs:
   pre-commit:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
-    - uses: actions/setup-python@v1
-    - name: set PY
-      run: echo "::set-env name=PY::$(python --version --version | sha256sum | cut -d' ' -f1)"
-    - uses: actions/cache@v1
-      with:
-        path: ~/.cache/pre-commit
-        key: pre-commit|${{ env.PY }}|${{ hashFiles('.pre-commit-config.yaml') }}
-    - uses: pre-commit/action@v1.0.0
+      - uses: actions/checkout@v1
+      - uses: actions/setup-python@v1
+      - name: set PY
+        run: echo "::set-env name=PY::$(python --version --version | sha256sum | cut -d' ' -f1)"
+      - uses: actions/cache@v1
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit|${{ env.PY }}|${{ hashFiles('.pre-commit-config.yaml') }}
+      - uses: pre-commit/action@v1.0.0
 ```
 
 ## Summary
@@ -481,6 +496,6 @@ Please check out https://www.pyopensci.org/
 ## TODO
 
 - auto PyPI publication
-https://packaging.python.org/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/
+  https://packaging.python.org/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/
 
 - conda-forge publication

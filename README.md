@@ -1,4 +1,4 @@
-## ioos_pkg_skeleton
+## xpublish_opendap
 
 [![Build Status](https://travis-ci.com/ioos/ioos-python-package-skeleton.svg?branch=master)](https://travis-ci.com/ioos/ioos-python-package-skeleton)
 
@@ -13,32 +13,30 @@ URLs for the docs and code.
 For `conda` users you can
 
 ```shell
-conda install --channel conda-forge ioos_pkg_skeleton
+conda install --channel conda-forge xpublish_opendap
 ```
 
 or, if you are a `pip` users
 
 ```shell
-pip install ioos_pkg_skeleton
+pip install xpublish_opendap
 ```
 
 ### Example
 
 ```python
-from ioos_pkg_skeleton import ioos_pkg_skeleton
+from xpublish_opendap import xpublish_opendap
 
 
-ioos_pkg_skeleton.meaning_of_life_url()
+xpublish_opendap.meaning_of_life_url()
 ```
-
 
 ## Get in touch
 
-Report bugs, suggest features or view the source code on [GitHub](https://github.com/ioos/ioos_pkg_skeleton/issues).
-
+Report bugs, suggest features or view the source code on [GitHub](https://github.com/ioos/xpublish_opendap/issues).
 
 ## License and copyright
 
-ioos_pkg_skeleton is licensed under BSD 3-Clause "New" or "Revised" License (BSD-3-Clause).
+xpublish_opendap is licensed under BSD 3-Clause "New" or "Revised" License (BSD-3-Clause).
 
-Development occurs on GitHub at <https://github.com/ioos/ioos_pkg_skeleton>.
+Development occurs on GitHub at <https://github.com/ioos/xpublish_opendap>.

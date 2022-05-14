@@ -9,6 +9,8 @@ flake8-print
 interrogate
 isort
 nbsphinx
+netCDF4
+pooch
 pre-commit
 pylint
 pytest
@@ -20,3 +22,5 @@ setuptools_scm
 sphinx
 twine
 wheel
+xarray
+xpublish

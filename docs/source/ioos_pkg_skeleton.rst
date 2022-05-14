@@ -1,7 +1,7 @@
-:mod:`ioos_pkg_skeleton API`
+:mod:`xpublish_opendap API`
 ----------------------------
 
-.. automodule:: ioos_pkg_skeleton.ioos_pkg_skeleton
+.. automodule:: xpublish_opendap.xpublish_opendap
    :members:
    :undoc-members:
    :show-inheritance:

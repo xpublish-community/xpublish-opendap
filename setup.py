@@ -1,7 +1,7 @@
 from setuptools import setup
 
 # CHANGE PKG NAME HERE
-pkg_name = "ioos_pkg_skeleton"
+pkg_name = "xpublish_opendap"
 
 setup(
     use_scm_version={
