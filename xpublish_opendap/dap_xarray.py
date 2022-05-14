@@ -36,13 +36,24 @@ def dap_dtype(da: xr.DataArray):
         return dap.String
 
 
+def dap_attribute(key: str, value):
+    """Create a DAP attribute"""
+    if isinstance(value, int):
+        dtype = dap.Int32
+    elif isinstance(value, float):
+        dtype = dap.Float64
+    else:
+        dtype = dap.String
+    return dap.Attribute(name=key, value=value, dtype=dtype)
+
+
 def dap_dimension(da: xr.DataArray) -> dap.Array:
     """Transform an xarray dimension into a DAP dimension"""
     encoded_da = xr.conventions.encode_cf_variable(da)
     dim = dap.Array(name=da.name, data=encoded_da.values, dtype=dap_dtype(encoded_da))
 
-    for k, v in encoded_da.attrs.items():
-        dim.append(dap.Attribute(name=k, value=v, dtype=dap.String))
+    for key, value in encoded_da.attrs.items():
+        dim.append(dap_attribute(key, value))
 
     return dim
 
@@ -56,8 +67,8 @@ def dap_grid(da: xr.DataArray, dims: Dict[str, dap.Array]) -> dap.Grid:
         dimensions=[dims[dim] for dim in da.dims],
     )
 
-    for k, v in da.attrs.items():
-        data_array.append(dap.Attribute(name=k, value=v, dtype=dap.String))
+    for key, value in da.attrs.items():
+        data_array.append(dap_attribute(key, value))
 
     return data_array
 
@@ -76,7 +87,7 @@ def dap_dataset(ds: xr.Dataset, name: str) -> dap.Dataset:
         data_array = dap_grid(ds[var], dims)
         dataset.append(data_array)
 
-    for k, v in ds.attrs.items():
-        dataset.append(dap.Attribute(name=k, value=v, dtype=dap.String))
+    for key, value in ds.attrs.items():
+        dataset.append(dap_attribute(key, value))
 
     return dataset

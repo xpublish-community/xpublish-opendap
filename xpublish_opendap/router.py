@@ -4,6 +4,7 @@ xpublish_opendap
 OpenDAP router for Xpublish
 """
 import logging
+from urllib import parse
 
 import cachey
 import opendap_protocol as dap
@@ -39,34 +40,38 @@ def get_dap_dataset(
     return dataset
 
 
-@dap_router.get(".dds")
-def dds_response(request: Request, dataset: dap.Dataset = Depends(get_dap_dataset)):
-    """OpenDAP DDS response (types and dimension metadata)"""
-    constraint = request.url.components[3]
+def dap_constraint(request: Request) -> str:
+    """Parse DAP constraints from request"""
+    constraint = parse.unquote(request.url.components[3])
 
+    return constraint
+
+
+@dap_router.get(".dds")
+def dds_response(
+    constraint=Depends(dap_constraint), dataset: dap.Dataset = Depends(get_dap_dataset),
+):
+    """OpenDAP DDS response (types and dimension metadata)"""
     return StreamingResponse(
-        dataset.dds(constraint=constraint),
-        media_type="text/plain",
+        dataset.dds(constraint=constraint), media_type="text/plain",
     )
 
 
 @dap_router.get(".das")
-def das_response(request: Request, dataset: dap.Dataset = Depends(get_dap_dataset)):
+def das_response(
+    constraint=Depends(dap_constraint), dataset: dap.Dataset = Depends(get_dap_dataset),
+):
     """OpenDAP DAS response (attribute metadata)"""
-    constraint = request.url.components[3]
-
     return StreamingResponse(
-        dataset.das(constraint=constraint),
-        media_type="text/plain",
+        dataset.das(constraint=constraint), media_type="text/plain",
     )
 
 
 @dap_router.get(".dods")
-def dods_response(request: Request, dataset: dap.Dataset = Depends(get_dap_dataset)):
+def dods_response(
+    constraint=Depends(dap_constraint), dataset: dap.Dataset = Depends(get_dap_dataset),
+):
     """OpenDAP dods response (data access)"""
-    constraint = request.url.components[3]
-
     return StreamingResponse(
-        dataset.dods(constraint=constraint),
-        media_type="application/octet-stream",
+        dataset.dods(constraint=constraint), media_type="application/octet-stream",
     )
