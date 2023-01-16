@@ -2,9 +2,9 @@
 xpublish_opendap provides an OpenDAP router for Xpublish
 """
 
-from xpublish_opendap.router import dap_router
+from xpublish_opendap.plugin import OpenDapPlugin
 
-__all__ = ["dap_router"]
+__all__ = ["OpenDapPlugin"]
 
 try:
     from ._version import __version__
