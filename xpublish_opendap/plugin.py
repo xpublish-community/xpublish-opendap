@@ -12,7 +12,7 @@ import opendap_protocol as dap
 import xarray as xr
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
-from xpublish import Plugin, hookimpl
+from xpublish import Plugin, hookimpl, Dependencies
 
 from .dap_xarray import dap_dataset
 
@@ -27,13 +27,13 @@ class OpenDapPlugin(Plugin):
     dataset_router_tags: List[str] = ["opendap"]
 
     @hookimpl
-    def dataset_router(self):
+    def dataset_router(self, deps: Dependencies):
         router = APIRouter(prefix=self.dataset_router_prefix, tags=self.dataset_router_tags)
 
         def get_dap_dataset(
             dataset_id: str,
-            ds: xr.Dataset = Depends(self.dependencies.dataset),
-            cache: cachey.Cache = Depends(self.dependencies.cache),
+            ds: xr.Dataset = Depends(deps.dataset),
+            cache: cachey.Cache = Depends(deps.cache),
         ):
             """
             Get a dataset that has been translated to opendap
