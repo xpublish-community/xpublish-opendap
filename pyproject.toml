@@ -1,6 +1,41 @@
 [build-system]
-requires = ["setuptools>=42", "wheel", "setuptools_scm[toml]>=3.4"]
+requires = ["setuptools>=61", "wheel", "setuptools_scm[toml]>=3.4"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "xpublish_opendap"
+description = ""
+readme = "README.md"
+requires-python = ">=3.9"
+keywords = []
+license = { file = "LICENSE.txt" }
+
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Topic :: Scientific/Engineering",
+]
+
+dynamic = ["version", "dependencies"]
+
+[tool.setuptools]
+packages = ["xpublish_opendap"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools_scm]
+write_to = "xpublish_opendap/_version.py"
+
+[project.entry-points."xpublish.plugin"]
+opendap = "xpublish_opendap.plugin:OpenDapPlugin"
 
 [tool.interrogate]
 ignore-init-method = true
