@@ -10,7 +10,11 @@ from urllib import parse
 import cachey
 import opendap_protocol as dap
 import xarray as xr
-from fastapi import APIRouter, Depends, Request
+from fastapi import (
+    APIRouter,
+    Depends,
+    Request,
+)
 from fastapi.responses import StreamingResponse
 from xpublish import (
     Plugin,
