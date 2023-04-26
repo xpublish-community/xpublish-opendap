@@ -11,7 +11,7 @@ import numpy as np
 import opendap_protocol as dap
 import xarray as xr
 
-logger = logging.getLogger("api")
+logger: logging.Logger = logging.getLogger("api")
 
 dtype_dap = {
     np.ubyte: dap.Byte,
@@ -24,7 +24,9 @@ dtype_dap = {
     np.str_: dap.String,
     np.int64: dap.Float64,  # not a direct mapping
 }
-dtype_dap = {np.dtype(k): v for k, v in dtype_dap.items()}
+dtype_dap: Dict[np.dtype, dap.DAPAtom] = {
+    np.dtype(k): v for k, v in dtype_dap.items()
+}
 
 
 def dap_dtype(da: xr.DataArray):
@@ -57,7 +59,7 @@ def dap_attribute(key: str, value: Any) -> dap.Attribute:
 
 def dap_dimension(da: xr.DataArray) -> dap.Array:
     """Transform an xarray dimension into a DAP dimension"""
-    encoded_da = xr.conventions.encode_cf_variable(da)
+    encoded_da: xr.DataArray = xr.conventions.encode_cf_variable(da)
 
     dim = dap.Array(
         name=da.name,
@@ -90,7 +92,7 @@ def dap_dataset(ds: xr.Dataset, name: str) -> dap.Dataset:
     """Create a DAP Dataset for an xarray Dataset"""
     dataset = dap.Dataset(name=name)
 
-    dims = {}
+    dims: Dict[str, dap.Array] = {}
     for dim in ds.dims:
         dims[dim] = dap_dimension(ds[dim])
 
