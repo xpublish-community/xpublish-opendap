@@ -33,7 +33,8 @@ def dap_dtype(da: xr.DataArray):
         return dtype_dap[da.dtype]
     except KeyError as e:
         logger.warning(
-            f"Unable to match dtype for {da.name}. Going to assume string will work for now... ({e})",
+            f"Unable to match dtype for {da.name}. "
+            f"Going to assume string will work for now... ({e})",
         )
         return dap.String
 
@@ -96,8 +97,8 @@ def dap_dataset(ds: xr.Dataset, name: str) -> dap.Dataset:
     dataset.append(*dims.values())
 
     for var in ds.data_vars:
-        data_array = dap_grid(ds[var], dims)
-        dataset.append(data_array)
+        data_grid = dap_grid(ds[var], dims)
+        dataset.append(data_grid)
 
     for key, value in ds.attrs.items():
         dataset.append(dap_attribute(key, value))
