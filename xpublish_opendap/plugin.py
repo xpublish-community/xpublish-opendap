@@ -24,17 +24,17 @@ from xpublish import (
 
 import xpublish_opendap.dap_xarray as dap_xarray
 
-logger = logging.getLogger("uvicorn")
+logger: logging.Logger = logging.getLogger("uvicorn")
 
 
 class OpenDapPlugin(Plugin):
-    name = "opendap"
+    name: str = "opendap"
 
-    dataset_router_prefix = "/opendap"
+    dataset_router_prefix: str = "/opendap"
     dataset_router_tags: List[str] = ["opendap"]
 
     @hookimpl
-    def dataset_router(self, deps: Dependencies):
+    def dataset_router(self, deps: Dependencies) -> APIRouter:
 
         router = APIRouter(
             prefix=self.dataset_router_prefix,
@@ -65,7 +65,6 @@ class OpenDapPlugin(Plugin):
         def dap_constraint(request: Request) -> str:
             """Parse DAP constraints from request"""
             constraint = parse.unquote(request.url.components[3])
-
             return constraint
 
         @router.get(".dds")
