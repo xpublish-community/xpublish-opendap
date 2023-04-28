@@ -1,11 +1,12 @@
-"""
-xpublish_opendap
+"""xpublish_opendap.
 
 OpenDAP router for Xpublish
 """
 import logging
-from typing import List
 from urllib import parse
+from typing import (
+    List,
+)
 
 import cachey
 import opendap_protocol as dap
@@ -63,7 +64,7 @@ class OpenDapPlugin(Plugin):
             return dataset
 
         def dap_constraint(request: Request) -> str:
-            """Parse DAP constraints from request"""
+            """Parse DAP constraints from request."""
             constraint = parse.unquote(request.url.components[3])
             return constraint
 

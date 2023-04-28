@@ -49,3 +49,21 @@ exclude = ["setup.py", "docs", "tests"]
 verbose = 1
 quiet = false
 color = true
+
+[tool.ruff]
+select = [
+    "E",  # pycodestyle
+    "F",  # pyflakes
+    "UP", # pyupgrade
+    "D",  # pydocstyle
+    "I",  # isort
+    "PL", # pylint
+    "A",  # flake8-builtins
+    "C4", # flake8-comprehensions
+    # flake8-mutable
+    "T20", # flake8-print
+]
+
+[tool.ruff.pydocstyle]
+# Use Google-style docstrings.
+convention = "google"

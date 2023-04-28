@@ -1,6 +1,4 @@
-"""
-Convert xarray.Datasets to OpenDAP datasets
-"""
+"""Convert xarray.Datasets to OpenDAP datasets."""
 import logging
 from typing import (
     Dict,
@@ -30,7 +28,7 @@ dtype_dap: Dict[np.dtype, dap.DAPAtom] = {
 
 
 def dap_dtype(da: xr.DataArray):
-    """Return a DAP type for the xr.DataArray"""
+    """Return a DAP type for the xr.DataArray."""
     try:
         return dtype_dap[da.dtype]
     except KeyError as e:
@@ -89,7 +87,7 @@ def dap_grid(da: xr.DataArray, dims: Dict[str, dap.Array]) -> dap.Grid:
 
 
 def dap_dataset(ds: xr.Dataset, name: str) -> dap.Dataset:
-    """Create a DAP Dataset for an xarray Dataset"""
+    """Create a DAP Dataset for an xarray Dataset."""
     dataset = dap.Dataset(name=name)
 
     dims: Dict[str, dap.Array] = {}
