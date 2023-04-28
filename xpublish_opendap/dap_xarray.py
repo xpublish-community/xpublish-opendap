@@ -47,7 +47,7 @@ def dap_attribute(key: str, value):
 
 def dap_dimension(da: xr.DataArray) -> dap.Array:
     """Transform an xarray dimension into a DAP dimension."""
-    encoded_da = xr.conventions.encode_cf_variable(da)
+    encoded_da = xr.conventions.encode_cf_variable(da.variable)
     dim = dap.Array(name=da.name, data=encoded_da.values, dtype=dap_dtype(encoded_da))
 
     for key, value in encoded_da.attrs.items():
