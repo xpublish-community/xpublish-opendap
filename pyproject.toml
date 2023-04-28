@@ -57,6 +57,11 @@ select = [
     "UP", # pyupgrade
     "D",  # pydocstyle
     "I",  # isort
+    "PL", # pylint
+    "A",  # flake8-builtins
+    "C4", # flake8-comprehensions
+    # flake8-mutable
+    "T20", # flake8-print
 ]
 
 [tool.ruff.pydocstyle]
