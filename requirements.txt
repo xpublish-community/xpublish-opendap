@@ -1,3 +1,3 @@
 opendap-protocol<1.2.0
 xarray
-git+https://github.com/xpublish-community/xpublish.git
+xpublish

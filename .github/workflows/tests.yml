@@ -24,15 +24,16 @@ jobs:
 
       - name: Python ${{ matrix.python-version }}
         shell: bash -l {0}
-        run: |
+        run: >
           conda create --name TEST python=${{ matrix.python-version }} --file requirements.txt --file requirements-dev.txt
           source activate TEST
+          pip install git+https://github.com/xpublish-community/xpublish.git
           pip install -e . --no-deps --force-reinstall
           conda info --all
           conda list
 
       - name: Tests
         shell: bash -l {0}
-        run: |
+        run: >
           source activate TEST
           pytest -rxs --cov=xpublish_opendap tests
