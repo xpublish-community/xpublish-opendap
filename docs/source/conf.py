@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ruff: noqa: D100
 #
 # xpublish_opendap documentation build configuration file, created by
 # sphinx-quickstart on Mon Oct  9 21:28:42 2017.
@@ -52,8 +53,8 @@ master_doc = "index"
 
 # General information about the project.
 project = "xpublish_opendap"
-copyright = "2017, Filipe Fernandes"
-author = "Filipe Fernandes"
+copyright = "2023, Xpublish Contributors"  # noqa: A001
+author = "Xpublish Contributors"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the

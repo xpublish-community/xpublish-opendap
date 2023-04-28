@@ -1,6 +1,4 @@
-"""
-xpublish_opendap provides an OpenDAP router for Xpublish
-"""
+"""xpublish_opendap provides an OpenDAP router for Xpublish."""
 
 from xpublish_opendap.plugin import OpenDapPlugin
 

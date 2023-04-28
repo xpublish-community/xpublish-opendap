@@ -1,8 +1,5 @@
-"""
-Convert xarray.Datasets to OpenDAP datasets
-"""
+"""Convert xarray.Datasets to OpenDAP datasets."""
 import logging
-from typing import Dict
 
 import numpy as np
 import opendap_protocol as dap
@@ -26,18 +23,19 @@ dtype_dap = {np.dtype(k): v for k, v in dtype_dap.items()}
 
 
 def dap_dtype(da: xr.DataArray):
-    """Return a DAP type for the xr.DataArray"""
+    """Return a DAP type for the xr.DataArray."""
     try:
         return dtype_dap[da.dtype]
     except KeyError as e:
         logger.warning(
-            f"Unable to match dtype for {da.name}. Going to assume string will work for now... ({e})",
+            f"Unable to match dtype for {da.name}. "
+            f"Going to assume string will work for now... ({e})",
         )
         return dap.String
 
 
 def dap_attribute(key: str, value):
-    """Create a DAP attribute"""
+    """Create a DAP attribute."""
     if isinstance(value, int):
         dtype = dap.Int32
     elif isinstance(value, float):
@@ -48,8 +46,8 @@ def dap_attribute(key: str, value):
 
 
 def dap_dimension(da: xr.DataArray) -> dap.Array:
-    """Transform an xarray dimension into a DAP dimension"""
-    encoded_da = xr.conventions.encode_cf_variable(da)
+    """Transform an xarray dimension into a DAP dimension."""
+    encoded_da = xr.conventions.encode_cf_variable(da.variable)
     dim = dap.Array(name=da.name, data=encoded_da.values, dtype=dap_dtype(encoded_da))
 
     for key, value in encoded_da.attrs.items():
@@ -58,8 +56,8 @@ def dap_dimension(da: xr.DataArray) -> dap.Array:
     return dim
 
 
-def dap_grid(da: xr.DataArray, dims: Dict[str, dap.Array]) -> dap.Grid:
-    """Transform an xarray DataArray into a DAP Grid"""
+def dap_grid(da: xr.DataArray, dims: dict[str, dap.Array]) -> dap.Grid:
+    """Transform an xarray DataArray into a DAP Grid."""
     data_array = dap.Grid(
         name=da.name,
         data=da.astype(da.encoding["dtype"]).data,
@@ -74,7 +72,7 @@ def dap_grid(da: xr.DataArray, dims: Dict[str, dap.Array]) -> dap.Grid:
 
 
 def dap_dataset(ds: xr.Dataset, name: str) -> dap.Dataset:
-    """Create a DAP Dataset for an xarray Dataset"""
+    """Create a DAP Dataset for an xarray Dataset."""
     dataset = dap.Dataset(name=name)
 
     dims = {}
