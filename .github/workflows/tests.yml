@@ -28,7 +28,7 @@ jobs:
           && micromamba activate TEST
           && pip install git+https://github.com/xpublish-community/xpublish.git
           && pip install -e . --no-deps --force-reinstall
-          && micromamba info --all
+          && micromamba info
           && micromamba list
 
       - name: Tests
