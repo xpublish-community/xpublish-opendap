@@ -49,3 +49,17 @@ exclude = ["setup.py", "docs", "tests"]
 verbose = 1
 quiet = false
 color = true
+
+[tool.ruff]
+target-version = "py39"
+select = [
+    "E",  # pycodestyle
+    "F",  # pyflakes
+    "UP", # pyupgrade
+    "D",  # pydocstyle
+    "I",  # isort
+]
+
+[tool.ruff.pydocstyle]
+# Use Google-style docstrings.
+convention = "google"

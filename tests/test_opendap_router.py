@@ -1,8 +1,9 @@
+# ruff: noqa: D100,D103
 import pytest
 import xpublish
 from fastapi.testclient import TestClient
 
-from xpublish_opendap import dap_router
+from xpublish_opendap import OpenDapPlugin
 
 
 @pytest.fixture(scope="session")
@@ -16,14 +17,13 @@ def dataset():
 
 @pytest.fixture(scope="session")
 def dap_xpublish(dataset):
-    rest = xpublish.Rest({"air": dataset}, routers=[dap_router])
+    rest = xpublish.Rest({"air": dataset}, plugins={"opendap": OpenDapPlugin()})
 
     return rest
 
 
 @pytest.fixture(scope="session")
 def dap_client(dap_xpublish):
-
     app = dap_xpublish.app
     client = TestClient(app)
 
@@ -31,7 +31,7 @@ def dap_client(dap_xpublish):
 
 
 def test_dds_response(dap_client):
-    response = dap_client.get("/datasets/air.dds")
+    response = dap_client.get("/datasets/air/opendap.dds")
 
     assert response.status_code == 200, "Response did not return successfully"
 
@@ -46,7 +46,7 @@ def test_dds_response(dap_client):
 
 
 def test_das_response(dap_client):
-    response = dap_client.get("/datasets/air.das")
+    response = dap_client.get("/datasets/air/opendap.das")
 
     assert response.status_code == 200, "Response did not return successfully"
 
