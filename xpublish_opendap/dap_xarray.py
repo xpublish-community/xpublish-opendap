@@ -1,11 +1,14 @@
 """Convert xarray.Datasets to OpenDAP datasets."""
 import logging
+from typing import (
+    Any,
+)
 
 import numpy as np
 import opendap_protocol as dap
 import xarray as xr
 
-logger = logging.getLogger("api")
+logger: logging.Logger = logging.getLogger("api")
 
 dtype_dap = {
     np.ubyte: dap.Byte,
@@ -16,16 +19,18 @@ dtype_dap = {
     np.float32: dap.Float32,
     np.float64: dap.Float64,
     np.str_: dap.String,
-    # Not a direct mapping
-    np.int64: dap.Float64,
+    np.int64: dap.Float64,  # not a direct mapping
 }
-dtype_dap = {np.dtype(k): v for k, v in dtype_dap.items()}
+dap_dtypes_dict: dict[np.dtype, dap.DAPAtom] = {
+    np.dtype(k): v for k, v in dtype_dap.items()
+}
+del dtype_dap
 
 
 def dap_dtype(da: xr.DataArray):
     """Return a DAP type for the xr.DataArray."""
     try:
-        return dtype_dap[da.dtype]
+        return dap_dtypes_dict[da.dtype]
     except KeyError as e:
         logger.warning(
             f"Unable to match dtype for {da.name}. "
@@ -34,7 +39,7 @@ def dap_dtype(da: xr.DataArray):
         return dap.String
 
 
-def dap_attribute(key: str, value):
+def dap_attribute(key: str, value: Any) -> dap.Attribute:
     """Create a DAP attribute."""
     if isinstance(value, int):
         dtype = dap.Int32
@@ -42,13 +47,23 @@ def dap_attribute(key: str, value):
         dtype = dap.Float64
     else:
         dtype = dap.String
-    return dap.Attribute(name=key, value=value, dtype=dtype)
+
+    return dap.Attribute(
+        name=key,
+        value=value,
+        dtype=dtype,
+    )
 
 
 def dap_dimension(da: xr.DataArray) -> dap.Array:
     """Transform an xarray dimension into a DAP dimension."""
-    encoded_da = xr.conventions.encode_cf_variable(da.variable)
-    dim = dap.Array(name=da.name, data=encoded_da.values, dtype=dap_dtype(encoded_da))
+    encoded_da: xr.DataArray = xr.conventions.encode_cf_variable(da.variable)
+
+    dim = dap.Array(
+        name=da.name,
+        data=encoded_da.values,
+        dtype=dap_dtype(encoded_da),
+    )
 
     for key, value in encoded_da.attrs.items():
         dim.append(dap_attribute(key, value))
@@ -58,7 +73,7 @@ def dap_dimension(da: xr.DataArray) -> dap.Array:
 
 def dap_grid(da: xr.DataArray, dims: dict[str, dap.Array]) -> dap.Grid:
     """Transform an xarray DataArray into a DAP Grid."""
-    data_array = dap.Grid(
+    data_grid = dap.Grid(
         name=da.name,
         data=da.astype(da.encoding["dtype"]).data,
         dtype=dap_dtype(da),
@@ -66,24 +81,24 @@ def dap_grid(da: xr.DataArray, dims: dict[str, dap.Array]) -> dap.Grid:
     )
 
     for key, value in da.attrs.items():
-        data_array.append(dap_attribute(key, value))
+        data_grid.append(dap_attribute(key, value))
 
-    return data_array
+    return data_grid
 
 
 def dap_dataset(ds: xr.Dataset, name: str) -> dap.Dataset:
     """Create a DAP Dataset for an xarray Dataset."""
     dataset = dap.Dataset(name=name)
 
-    dims = {}
+    dims: dict[str, dap.Array] = {}
     for dim in ds.dims:
         dims[dim] = dap_dimension(ds[dim])
 
     dataset.append(*dims.values())
 
     for var in ds.data_vars:
-        data_array = dap_grid(ds[var], dims)
-        dataset.append(data_array)
+        data_grid = dap_grid(ds[var], dims)
+        dataset.append(data_grid)
 
     for key, value in ds.attrs.items():
         dataset.append(dap_attribute(key, value))
