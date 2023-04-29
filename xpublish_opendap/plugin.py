@@ -4,9 +4,6 @@ OpenDAP router for Xpublish
 """
 import logging
 from urllib import parse
-from typing import (
-    List,
-)
 
 import cachey
 import opendap_protocol as dap
@@ -18,25 +15,27 @@ from fastapi import (
 )
 from fastapi.responses import StreamingResponse
 from xpublish import (
+    Dependencies,
     Plugin,
     hookimpl,
-    Dependencies,
 )
 
-import xpublish_opendap.dap_xarray as dap_xarray
+from xpublish_opendap import dap_xarray
 
 logger: logging.Logger = logging.getLogger("uvicorn")
 
 
 class OpenDapPlugin(Plugin):
+    """OpenDAP plugin for xpublish."""
+
     name: str = "opendap"
 
     dataset_router_prefix: str = "/opendap"
-    dataset_router_tags: List[str] = ["opendap"]
+    dataset_router_tags: list[str] = ["opendap"]
 
     @hookimpl
     def dataset_router(self, deps: Dependencies) -> APIRouter:
-
+        """Create an OpenDAP router for xpublish."""
         router = APIRouter(
             prefix=self.dataset_router_prefix,
             tags=self.dataset_router_tags,
@@ -47,10 +46,7 @@ class OpenDapPlugin(Plugin):
             ds: xr.Dataset = Depends(deps.dataset),
             cache: cachey.Cache = Depends(deps.cache),
         ) -> dap.Dataset:
-            """
-            Get a dataset that has been translated to opendap
-            """
-
+            """Get a dataset that has been translated to opendap."""
             # get cached dataset if it exists
             cache_key = f"opendap_dataset_{dataset_id}"
             dataset = cache.get(cache_key)
@@ -73,8 +69,7 @@ class OpenDapPlugin(Plugin):
             constraint=Depends(dap_constraint),
             dataset: dap.Dataset = Depends(get_dap_dataset),
         ) -> StreamingResponse:
-            """OpenDAP DDS response (types and dimension metadata)"""
-
+            """OpenDAP DDS response (types and dimension metadata)."""
             return StreamingResponse(
                 dataset.dds(constraint=constraint),
                 media_type="text/plain",
@@ -85,8 +80,7 @@ class OpenDapPlugin(Plugin):
             constraint=Depends(dap_constraint),
             dataset: dap.Dataset = Depends(get_dap_dataset),
         ) -> StreamingResponse:
-            """OpenDAP DAS response (attribute metadata)"""
-
+            """OpenDAP DAS response (attribute metadata)."""
             return StreamingResponse(
                 dataset.das(constraint=constraint),
                 media_type="text/plain",
@@ -97,8 +91,7 @@ class OpenDapPlugin(Plugin):
             constraint=Depends(dap_constraint),
             dataset: dap.Dataset = Depends(get_dap_dataset),
         ) -> StreamingResponse:
-            """OpenDAP dods response (data access)"""
-
+            """OpenDAP dods response (data access)."""
             return StreamingResponse(
                 dataset.dods(constraint=constraint),
                 media_type="application/octet-stream",

@@ -1,7 +1,6 @@
 """Convert xarray.Datasets to OpenDAP datasets."""
 import logging
 from typing import (
-    Dict,
     Any,
 )
 
@@ -22,15 +21,16 @@ dtype_dap = {
     np.str_: dap.String,
     np.int64: dap.Float64,  # not a direct mapping
 }
-dtype_dap: Dict[np.dtype, dap.DAPAtom] = {
+dap_dtypes_dict: dict[np.dtype, dap.DAPAtom] = {
     np.dtype(k): v for k, v in dtype_dap.items()
 }
+del dtype_dap
 
 
 def dap_dtype(da: xr.DataArray):
     """Return a DAP type for the xr.DataArray."""
     try:
-        return dtype_dap[da.dtype]
+        return dap_dtypes_dict[da.dtype]
     except KeyError as e:
         logger.warning(
             f"Unable to match dtype for {da.name}. "
@@ -40,7 +40,7 @@ def dap_dtype(da: xr.DataArray):
 
 
 def dap_attribute(key: str, value: Any) -> dap.Attribute:
-    """Create a DAP attribute"""
+    """Create a DAP attribute."""
     if isinstance(value, int):
         dtype = dap.Int32
     elif isinstance(value, float):
@@ -56,7 +56,7 @@ def dap_attribute(key: str, value: Any) -> dap.Attribute:
 
 
 def dap_dimension(da: xr.DataArray) -> dap.Array:
-    """Transform an xarray dimension into a DAP dimension"""
+    """Transform an xarray dimension into a DAP dimension."""
     encoded_da: xr.DataArray = xr.conventions.encode_cf_variable(da.variable)
 
     dim = dap.Array(
@@ -71,8 +71,8 @@ def dap_dimension(da: xr.DataArray) -> dap.Array:
     return dim
 
 
-def dap_grid(da: xr.DataArray, dims: Dict[str, dap.Array]) -> dap.Grid:
-    """Transform an xarray DataArray into a DAP Grid"""
+def dap_grid(da: xr.DataArray, dims: dict[str, dap.Array]) -> dap.Grid:
+    """Transform an xarray DataArray into a DAP Grid."""
     data_grid = dap.Grid(
         name=da.name,
         data=da.astype(da.encoding["dtype"]).data,
@@ -90,7 +90,7 @@ def dap_dataset(ds: xr.Dataset, name: str) -> dap.Dataset:
     """Create a DAP Dataset for an xarray Dataset."""
     dataset = dap.Dataset(name=name)
 
-    dims: Dict[str, dap.Array] = {}
+    dims: dict[str, dap.Array] = {}
     for dim in ds.dims:
         dims[dim] = dap_dimension(ds[dim])
 
