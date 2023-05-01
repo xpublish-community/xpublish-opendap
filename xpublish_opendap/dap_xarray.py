@@ -10,6 +10,12 @@ import xarray as xr
 
 logger: logging.Logger = logging.getLogger("api")
 
+
+class NoEncodingDtype(KeyError):
+    """Exception for when no encoding dtype is found."""
+    ...
+
+
 dtype_dap = {
     np.ubyte: dap.Byte,
     np.int16: dap.Int16,
@@ -73,10 +79,11 @@ def dap_dimension(da: xr.DataArray) -> dap.Array:
 
 def dap_grid(da: xr.DataArray, dims: dict[str, dap.Array]) -> dap.Grid:
     """Transform an xarray DataArray into a DAP Grid."""
+    # get encoding dtype (should exist for numeric dtypes)
     try:
         encoding_dtype = da.encoding["dtype"]
     except KeyError:
-        encoding_dtype = da.dtype
+        raise NoEncodingDtype
 
     data_grid = dap.Grid(
         name=da.name,
@@ -102,8 +109,16 @@ def dap_dataset(ds: xr.Dataset, name: str) -> dap.Dataset:
     dataset.append(*dims.values())
 
     for var in ds.data_vars:
-        data_grid = dap_grid(ds[var], dims)
-        dataset.append(data_grid)
+        try:
+            data_grid = dap_grid(ds[var], dims)
+            dataset.append(data_grid)
+        except NoEncodingDtype:
+            logging.warning(
+                f"Unable to create grid for {var} of type={ds[var].dtype}. "
+                f"No encoding dtype found. "
+                f"Skipping this variable for now...",
+            )
+            continue
 
     for key, value in ds.attrs.items():
         dataset.append(dap_attribute(key, value))
