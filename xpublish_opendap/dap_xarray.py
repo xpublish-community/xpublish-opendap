@@ -13,6 +13,7 @@ logger: logging.Logger = logging.getLogger("api")
 
 class NoEncodingDtype(KeyError):
     """Exception for when no encoding dtype is found."""
+
     ...
 
 
