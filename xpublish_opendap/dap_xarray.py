@@ -84,7 +84,7 @@ def dap_grid(da: xr.DataArray, dims: dict[str, dap.Array]) -> dap.Grid:
     try:
         encoding_dtype = da.encoding["dtype"]
     except KeyError:
-        raise NoEncodingDtype
+        raise NoEncodingDtype from KeyError
 
     data_grid = dap.Grid(
         name=da.name,
