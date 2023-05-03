@@ -80,15 +80,9 @@ def dap_dimension(da: xr.DataArray) -> dap.Array:
 
 def dap_grid(da: xr.DataArray, dims: dict[str, dap.Array]) -> dap.Grid:
     """Transform an xarray DataArray into a DAP Grid."""
-    # get encoding dtype (should exist for numeric dtypes)
-    try:
-        encoding_dtype = da.encoding["dtype"]
-    except KeyError:
-        raise NoEncodingDtype from KeyError
-
     data_grid = dap.Grid(
         name=da.name,
-        data=da.astype(encoding_dtype).data,
+        data=da.astype(da.encoding["dtype"]).data,
         dtype=dap_dtype(da),
         dimensions=[dims[dim] for dim in da.dims],
     )
