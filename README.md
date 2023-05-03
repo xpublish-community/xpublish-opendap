@@ -1,6 +1,7 @@
 ## xpublish_opendap
 
 [![Tests](https://github.com/gulfofmaine/xpublish-opendap/actions/workflows/tests.yml/badge.svg)](https://github.com/gulfofmaine/xpublish-opendap/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/xpublish-community/xpublish-opendap/branch/main/graph/badge.svg?token=0HMS1Q8Z8Y)](https://codecov.io/gh/xpublish-community/xpublish-opendap)
 
 Quick description
 
