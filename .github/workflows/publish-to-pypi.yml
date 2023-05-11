@@ -47,10 +47,12 @@ jobs:
           && python -m pip install --upgrade build twine
           && python -m twine check *
 
-      - name: Publish distribution 📦 to Test PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
+      # Skipping Test PyPI due to issues with setuptools_scm
+      # see https://github.com/xpublish-community/xpublish-opendap/issues/10
+      # - name: Publish distribution 📦 to Test PyPI
+      #   uses: pypa/gh-action-pypi-publish@release/v1
+      #   with:
+      #     repository-url: https://test.pypi.org/legacy/
 
       - name: Publish a Python distribution to PyPI
         if: success() && github.event_name == 'release'
