@@ -2,7 +2,6 @@ include *.txt
 include README.md
 include pyproject.toml
 
-# CHANGE PKG NAME HERE
 graft xpublish_opendap
 
 prune docs
@@ -12,6 +11,7 @@ prune *.egg-info
 
 global-exclude *.nc
 
+exclude .pre-commit-config.yaml
 exclude *.yml
 exclude *.enc
 exclude .gitignore

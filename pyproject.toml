@@ -28,6 +28,9 @@ dynamic = ["version", "dependencies"]
 [project.urls]
 "Homepage" = "https://github.com/xpublish-community/xpublish-opendap/"
 
+[project.entry-points."xpublish.plugin"]
+opendap = "xpublish_opendap.plugin:OpenDapPlugin"
+
 [tool.setuptools]
 packages = ["xpublish_opendap"]
 
@@ -38,8 +41,8 @@ dependencies = { file = ["requirements.txt"] }
 write_to = "xpublish_opendap/_version.py"
 local_scheme = "no-local-version"
 
-[project.entry-points."xpublish.plugin"]
-opendap = "xpublish_opendap.plugin:OpenDapPlugin"
+[tool.check-manifest]
+ignore = ["xpublish_opendap/_version.py"]
 
 [tool.ruff]
 select = [
