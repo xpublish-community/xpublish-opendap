@@ -39,7 +39,7 @@ dependencies = { file = ["requirements.txt"] }
 
 [tool.setuptools_scm]
 write_to = "xpublish_opendap/_version.py"
-local_scheme = "no-local-version"
+# local_scheme = "no-local-version"
 
 [tool.check-manifest]
 ignore = ["xpublish_opendap/_version.py"]
