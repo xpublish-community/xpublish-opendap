@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61", "wheel", "setuptools_scm[toml]>=3.4"]
+requires = ["setuptools>=61", "wheel", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -25,6 +25,9 @@ classifiers = [
 
 dynamic = ["version", "dependencies"]
 
+[project.urls]
+"Homepage" = "https://github.com/xpublish-community/xpublish-opendap/"
+
 [tool.setuptools]
 packages = ["xpublish_opendap"]
 
@@ -33,6 +36,7 @@ dependencies = { file = ["requirements.txt"] }
 
 [tool.setuptools_scm]
 write_to = "xpublish_opendap/_version.py"
+local_scheme = "no-local-version"
 
 [project.entry-points."xpublish.plugin"]
 opendap = "xpublish_opendap.plugin:OpenDapPlugin"
