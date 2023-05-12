@@ -1,11 +1,15 @@
 ## xpublish_opendap
 
+[![PyPI](https://img.shields.io/pypi/v/xpublish-opendap)](https://pypi.org/project/xpublish-opendap/)
+[![Conda Version](https://img.shields.io/conda/vn/conda-forge/xpublish-opendap.svg)](https://anaconda.org/conda-forge/xpublish-opendap)
+
 [![Tests](https://github.com/gulfofmaine/xpublish-opendap/actions/workflows/tests.yml/badge.svg)](https://github.com/gulfofmaine/xpublish-opendap/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/xpublish-community/xpublish-opendap/branch/main/graph/badge.svg?token=0HMS1Q8Z8Y)](https://codecov.io/gh/xpublish-community/xpublish-opendap)
+[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/xpublish-community/xpublish-opendap/main.svg)](https://results.pre-commit.ci/latest/github/xpublish-community/xpublish-opendap/main)
 
 OpenDAP endpoint plugin for Xpublish.
 
-### Installation - Conda not enabled yet
+### Installation
 
 For `conda` users you can
 
