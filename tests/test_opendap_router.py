@@ -62,3 +62,19 @@ def test_das_response(dap_client):
     assert (
         'String title "4x daily NMC reanalysis (1948)"' in content
     ), "Global attributes are returned"
+
+
+def test_dods_response(dap_client):
+    response = dap_client.get("/datasets/air/opendap.dods")
+
+    assert response.status_code == 200, "Response did not return successfully"
+    assert isinstance(response.content, bytes), "DODS Response content is not bytes"
+
+    text_content = response.text
+
+    assert "Dataset {" in text_content
+    assert "Float32 lat[lat = 25]" in text_content
+    assert "Float32 time[time = 2920]" in text_content
+    assert "Float32 lon[lon = 53]" in text_content
+    assert "Grid {" in text_content
+    assert "Float32 air[time = 2920][lat = 25][lon = 53]" in text_content
