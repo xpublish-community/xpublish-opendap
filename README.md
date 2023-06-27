@@ -14,13 +14,13 @@ OpenDAP endpoint plugin for Xpublish.
 For `conda` users you can
 
 ```shell
-conda install --channel conda-forge xpublish_opendap
+conda install --channel conda-forge xpublish-opendap
 ```
 
 or, if you are a `pip` users
 
 ```shell
-pip install xpublish_opendap
+pip install xpublish-opendap
 ```
 
 Once it's installed, the plugin will register itself with Xpublish and OpenDAP endpoints will be included for each dataset on the server.
