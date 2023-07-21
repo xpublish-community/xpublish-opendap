@@ -16,3 +16,4 @@ exclude *.yml
 exclude *.enc
 exclude .gitignore
 exclude .isort.cfg
+exclude noxfile.py
