@@ -4,6 +4,7 @@ doctr
 httpx
 nbsphinx
 netCDF4
+nox
 pooch
 pre-commit
 pylint
