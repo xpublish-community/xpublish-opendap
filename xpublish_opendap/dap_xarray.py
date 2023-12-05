@@ -2,6 +2,7 @@
 import logging
 from typing import (
     Any,
+    Union,
 )
 
 import numpy as np
@@ -21,19 +22,19 @@ dtype_dap = {
     np.str_: dap.String,
     np.int64: dap.Float64,  # not a direct mapping
 }
-dap_dtypes_dict: dict[np.dtype, dap.DAPAtom] = {
+dap_dtypes_dict: dict[np.dtype, type[dap.DAPAtom]] = {
     np.dtype(k): v for k, v in dtype_dap.items()
 }
 del dtype_dap
 
 
-def dap_dtype(da: xr.DataArray):
+def dap_dtype(da: Union[xr.DataArray, xr.Variable]) -> type[dap.DAPAtom]:
     """Return a DAP type for the xr.DataArray."""
     try:
         return dap_dtypes_dict[da.dtype]
     except KeyError as e:
         logger.warning(
-            f"Unable to match dtype for {da.name}. "
+            f"Unable to match dtype={da.dtype} for {getattr(da, 'name', type(da))}. "
             f"Going to assume string will work for now... ({e})",
         )
         return dap.String
@@ -57,7 +58,11 @@ def dap_attribute(key: str, value: Any) -> dap.Attribute:
 
 def dap_dimension(da: xr.DataArray) -> dap.Array:
     """Transform an xarray dimension into a DAP dimension."""
-    encoded_da: xr.DataArray = xr.conventions.encode_cf_variable(da.variable)
+    encoded_da: xr.Variable = xr.conventions.encode_cf_variable(da.variable)
+
+    # protect against reverse encoding not matching to dap.DAPAtom dtypes
+    if str(encoded_da.dtype).startswith(">"):
+        encoded_da = encoded_da.astype(str(encoded_da.dtype).replace(">", "<"))
 
     dim = dap.Array(
         name=da.name,
@@ -75,7 +80,7 @@ def dap_grid(da: xr.DataArray, dims: dict[str, dap.Array]) -> dap.Grid:
     """Transform an xarray DataArray into a DAP Grid."""
     data_grid = dap.Grid(
         name=da.name,
-        data=da.astype(da.encoding["dtype"]).data,
+        data=da.astype(da.dtype).data,
         dtype=dap_dtype(da),
         dimensions=[dims[dim] for dim in da.dims],
     )
