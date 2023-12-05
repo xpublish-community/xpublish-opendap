@@ -31,7 +31,7 @@ del dtype_dap
 def dap_dtype(da: Union[xr.DataArray, xr.Variable]) -> type[dap.DAPAtom]:
     """Return a DAP type for the xr.DataArray."""
     try:
-        return dap_dtypes_dict[np.dtype(da.dtype)]
+        return dap_dtypes_dict[da.dtype]
     except KeyError as e:
         logger.warning(
             f"Unable to match dtype={da.dtype} for {getattr(da, 'name', 'DataArray')}. "
