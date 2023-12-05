@@ -22,7 +22,7 @@ dtype_dap = {
     np.str_: dap.String,
     np.int64: dap.Float64,  # not a direct mapping
 }
-dap_dtypes_dict: dict[Union[str, np.dtype], type[dap.DAPAtom]] = {
+dap_dtypes_dict: dict[np.dtype, type[dap.DAPAtom]] = {
     np.dtype(k): v for k, v in dtype_dap.items()
 }
 del dtype_dap
