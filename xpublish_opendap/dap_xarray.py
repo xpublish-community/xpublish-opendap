@@ -32,6 +32,7 @@ def dap_dtype(da: xr.DataArray):
     try:
         return dap_dtypes_dict[da.dtype]
     except KeyError as e:
+        raise KeyError
         logger.warning(
             f"Unable to match dtype={da.dtype} for {getattr(da, 'name', 'DataArray')}. "
             f"Going to assume string will work for now... ({e})",
