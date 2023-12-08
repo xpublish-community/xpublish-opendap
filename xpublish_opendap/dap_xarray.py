@@ -48,6 +48,8 @@ def dap_attribute(key: str, value: Any) -> dap.Attribute:
         dtype = dap.Float64
     else:
         dtype = dap.String
+        # Escape a double quote in the attribute value. Other servers like TDS do this. Without this clients fail.
+        value = value.replace('"', '\\"')
 
     return dap.Attribute(
         name=key,
