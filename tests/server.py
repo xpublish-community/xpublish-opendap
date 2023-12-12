@@ -14,7 +14,11 @@ ds_attrs_cast.attrs["npint"] = np.int16(16)
 ds_attrs_cast.attrs["npintthirtytwo"] = np.int32(32)
 
 rest = xpublish.Rest(
-    {"air": ds, "attrs_quote_types": ds_attrs_quote, "attrs_cast": ds_attrs_cast},
+    {
+        "air": ds, 
+        "attrs_quote": ds_attrs_quote, 
+        "attrs_cast": ds_attrs_cast
+    },
     plugins={"opendap": OpenDapPlugin()},
 )
 
