@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xpublish_opendap"
-description = ""
+description = "OpenDAP plugin for Xpublish"
 readme = "README.md"
 requires-python = ">=3.9"
-keywords = []
+keywords = ["xarray", "xpublish", "opendap"]
 license = { file = "LICENSE.txt" }
 
 classifiers = [
