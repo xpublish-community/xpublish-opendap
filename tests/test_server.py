@@ -32,9 +32,13 @@ def test_xarray_engines(xpublish_server, engine, dataset):
     assert ds == dataset
 
 
-def test_attrs_quote(xpublish_server):
+def test_attrs_types(xpublish_server):
     """Test that we are formatting OpenDAP attributes that contain '"' properly."""
-    url = f"{xpublish_server}/datasets/attrs_quote/opendap"
+    url = f"{xpublish_server}/datasets/attrs_quote_types/opendap"
     ds = xr.open_dataset(url)
 
+    print(ds.attrs)
+
     assert ds.attrs["quotes"] == 'This attribute uses "quotes"'
+    assert ds.attrs["npint"] == 16
+    assert ds.attrs["npintthirtytwo"] == 32
