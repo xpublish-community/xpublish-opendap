@@ -1,7 +1,7 @@
 """Test OpenDAP server with air temperature dataset."""
+import numpy as np
 import xarray.tutorial
 import xpublish
-import numpy as np
 
 from xpublish_opendap import OpenDapPlugin
 
