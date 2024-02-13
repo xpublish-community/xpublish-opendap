@@ -7,15 +7,6 @@ from xpublish_opendap import OpenDapPlugin
 
 
 @pytest.fixture(scope="session")
-def dataset():
-    from xarray.tutorial import open_dataset
-
-    ds = open_dataset("air_temperature")
-
-    return ds
-
-
-@pytest.fixture(scope="session")
 def dap_xpublish(dataset):
     rest = xpublish.Rest({"air": dataset}, plugins={"opendap": OpenDapPlugin()})
 

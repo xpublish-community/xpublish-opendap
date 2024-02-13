@@ -47,6 +47,17 @@ def dap_attribute(key: str, value: Any) -> dap.Attribute:
         dtype = dap.Int32
     elif isinstance(value, float):
         dtype = dap.Float64
+    elif isinstance(value, np.float32):
+        dtype = dap.Float32
+    elif isinstance(value, np.int16):
+        dtype = dap.Int16
+    elif isinstance(value, np.int32):
+        dtype = dap.Int32
+    elif isinstance(value, str):
+        dtype = dap.String
+        # Escape a double quote in the attribute value.
+        # Other servers like TDS do this. Without this clients fail.
+        value = value.replace('"', '\\"')
     else:
         dtype = dap.String
 
