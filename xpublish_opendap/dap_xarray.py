@@ -1,4 +1,5 @@
 """Convert xarray.Datasets to OpenDAP datasets."""
+
 import logging
 from typing import (
     Any,
