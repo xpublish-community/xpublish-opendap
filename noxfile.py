@@ -13,7 +13,7 @@ pydantic_versions = workflow["jobs"]["run"]["strategy"]["matrix"]["pydantic-vers
 @nox.parametrize("pydantic", pydantic_versions)
 def tests(session: nox.Session, pydantic: str):
     """Run py.test against Github Actions matrix.
-    
+
     Allows passing additional arguments to py.test with with postargs,
     for example: `nox -- --pdb`.
     """
