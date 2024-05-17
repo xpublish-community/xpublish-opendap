@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xpublish_opendap"
-description = ""
+description = "OpenDAP plugin for Xpublish"
 readme = "README.md"
 requires-python = ">=3.9"
-keywords = []
+keywords = ["xarray", "xpublish", "opendap"]
 license = { file = "LICENSE.txt" }
 
 classifiers = [
@@ -43,7 +43,7 @@ write_to = "xpublish_opendap/_version.py"
 [tool.check-manifest]
 ignore = ["xpublish_opendap/_version.py"]
 
-[tool.ruff]
+[tool.ruff.lint]
 select = [
     "A",   # flake8-builtins
     "B",   # flake8-bugbear
@@ -58,10 +58,15 @@ select = [
     "W",   # pycodestyle warnings
 ]
 
-[tool.ruff.pydocstyle]
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/*" = [
+    "PLR2004"  # It's reasonable to use magic values in tests
+    ]
+
+[tool.ruff.lint.pydocstyle]
 # Use Google-style docstrings.
 convention = "google"
 
-[tool.ruff.flake8-bugbear]
+[tool.ruff.lint.flake8-bugbear]
 # Allow fastapi.Depends and other dependency injection style function arguments
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]

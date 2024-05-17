@@ -7,15 +7,6 @@ from xpublish_opendap import OpenDapPlugin
 
 
 @pytest.fixture(scope="session")
-def dataset():
-    from xarray.tutorial import open_dataset
-
-    ds = open_dataset("air_temperature")
-
-    return ds
-
-
-@pytest.fixture(scope="session")
 def dap_xpublish(dataset):
     rest = xpublish.Rest({"air": dataset}, plugins={"opendap": OpenDapPlugin()})
 
@@ -42,7 +33,7 @@ def test_dds_response(dap_client):
     assert "Float32 time[time = 2920]" in content
     assert "Float32 lon[lon = 53]" in content
     assert "Grid {" in content
-    assert "Float32 air[time = 2920][lat = 25][lon = 53]" in content
+    assert "Float64 air[time = 2920][lat = 25][lon = 53]" in content
 
 
 def test_das_response(dap_client):
@@ -77,4 +68,4 @@ def test_dods_response(dap_client):
     assert "Float32 time[time = 2920]" in text_content
     assert "Float32 lon[lon = 53]" in text_content
     assert "Grid {" in text_content
-    assert "Float32 air[time = 2920][lat = 25][lon = 53]" in text_content
+    assert "Float64 air[time = 2920][lat = 25][lon = 53]" in text_content
