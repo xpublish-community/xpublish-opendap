@@ -65,3 +65,6 @@ convention = "google"
 [tool.ruff.flake8-bugbear]
 # Allow fastapi.Depends and other dependency injection style function arguments
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]
+
+[tool.ruff.format]
+docstring-code-format = true
