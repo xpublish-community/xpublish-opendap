@@ -16,4 +16,4 @@ def tests(session: nox.Session, pydantic: str):
     session.install("-r", "requirements-dev.txt")
     session.install(".")
     session.install(f"pydantic{pydantic}")
-    session.run("pytest", "--verbose")
+    session.run("pytest", "--verbose", *session.posargs)
