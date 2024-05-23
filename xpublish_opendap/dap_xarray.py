@@ -90,13 +90,16 @@ def dap_dimension(da: xr.DataArray) -> dap.Array:
 
 def dap_grid(da: xr.DataArray, dims: dict[str, dap.Array]) -> dap.Grid:
     """Transform an xarray DataArray into a DAP Grid."""
-    encoded_da = xr.conventions.encode_cf_variable(da.variable)
+    if np.issubdtype(da.dtype, np.datetime64):
+        encoded_da: xr.Variable = xr.conventions.encode_cf_variable(da.variable)
+    else:
+        encoded_da = da
 
     data_grid = dap.Grid(
         name=da.name,
         data=encoded_da.astype(encoded_da.dtype).data,
         dtype=dap_dtype(encoded_da),
-        dimensions=[dims[dim] for dim in da.dims],
+        dimensions=[dims[dim] for dim in encoded_da.dims],
     )
 
     for key, value in da.attrs.items():
