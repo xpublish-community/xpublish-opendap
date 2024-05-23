@@ -8,7 +8,7 @@ from xprocess import ProcessStarter
 server_path = Path(__file__).parent / "server.py"
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def xpublish_server(xprocess):
     """Launch an Xpublish server in the background.
 

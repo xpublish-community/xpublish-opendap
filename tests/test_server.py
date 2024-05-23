@@ -7,6 +7,7 @@ Live tests are currently failing on Windows, see:
 """
 
 import sys
+from pathlib import Path
 
 import netCDF4
 import pytest
@@ -31,7 +32,9 @@ def test_default_xarray_engine(xpublish_server, dataset):
     """Test opening OpenDAP air dataset with default Xarray engine."""
     url = f"{xpublish_server}/datasets/air/opendap"
     ds = xr.open_dataset(url)
-    assert ds == dataset
+    # assert ds == dataset
+    xr.testing.assert_equal(ds, dataset)
+    # xr.testing.assert_identical(ds, dataset)
 
 
 @pytest.mark.skipif(
@@ -76,3 +79,22 @@ def test_attrs_types(xpublish_server):
 
     assert ds.attrs["npint"] == 16
     assert ds.attrs["npintthirtytwo"] == 32
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="NetCDF4 is failing on Windows Github Actions workers",
+)
+def test_coordinates_persist_correctly(xpublish_server):
+    """Test that encoded coordinate data makes it through OpenDAP correctly.
+
+    xref: https://github.com/xpublish-community/xpublish/discussions/246
+    """
+    dataset = xr.open_dataset(Path(__file__).parent / "min_coordinates_encoding.nc")
+
+    url = f"{xpublish_server}/datasets/coords_encoding/opendap"
+    ds = xr.open_dataset(url)
+    assert ds.dims == dataset.dims
+    assert ds.coords == dataset.coords
+    assert ds.variables == dataset.variables
+    assert ds == dataset
