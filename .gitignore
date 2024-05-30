@@ -9,3 +9,4 @@ build/
 dist/
 docs/source/tutorial.ipynb
 xpublish_opendap/_version.py
+**/.DS_Store

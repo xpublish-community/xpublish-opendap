@@ -1,0 +1,7 @@
+services:
+  hyrax:
+    image: opendap/hyrax:1.17.0-62
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/usr/share/hyrax
