@@ -35,16 +35,14 @@ def test_default_xarray_engine(xpublish_server, dataset):
     xr.testing.assert_equal(ds, dataset)
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="NetCDF4 is failing on Windows Github Actions workers",
+)
 @pytest.mark.parametrize(
     "engine",
     [
-        pytest.param(
-            "netcdf4",
-            marks=pytest.mark.skipif(
-                sys.platform == "win32",
-                reason="NetCDF4 is failing on Windows Github Actions workers",
-            ),
-        ),
+        "netcdf4",
         pytest.param(
             "h5netcdf",
             marks=pytest.mark.xfail(
