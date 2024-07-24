@@ -43,7 +43,7 @@ class OpenDapPlugin(Plugin):
         )
 
         def get_dap_dataset(
-            dataset_id: str,
+            dataset_id: str = "default",
             ds: xr.Dataset = Depends(deps.dataset),
             cache: cachey.Cache = Depends(deps.cache),
         ) -> dap.Dataset:
