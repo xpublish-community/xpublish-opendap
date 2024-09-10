@@ -68,17 +68,28 @@ def dap_attribute(key: str, value: Any) -> dap.Attribute:
     )
 
 
-def dap_dimension(da: xr.DataArray) -> dap.Array:
-    """Transform an xarray dimension into a DAP dimension."""
-    encoded_da: xr.Variable = xr.conventions.encode_cf_variable(da.variable)
+def encode_da(da: xr.DataArray) -> xr.Variable:
+    """Encode an Xarray DataArray."""
+    if np.issubdtype(da.dtype, np.datetime64):
+        encoded_da: xr.Variable = xr.conventions.encode_cf_variable(da.variable)
+
+    else:
+        encoded_da = da.variable
 
     # protect against reverse encoding not matching to dap.DAPAtom dtypes
     if str(encoded_da.dtype).startswith(">"):
         encoded_da = encoded_da.astype(str(encoded_da.dtype).replace(">", "<"))
 
+    return encoded_da
+
+
+def dap_dimension(da: xr.DataArray) -> dap.Array:
+    """Transform an xarray dimension into a DAP dimension."""
+    encoded_da = encode_da(da)
+
     dim = dap.Array(
         name=da.name,
-        data=encoded_da.values,
+        data=encoded_da.data,
         dtype=dap_dtype(encoded_da),
     )
 
@@ -88,18 +99,66 @@ def dap_dimension(da: xr.DataArray) -> dap.Array:
     return dim
 
 
+class Array(dap.DAPDataObject):
+    """Generate a OpenDAP array that supports multiple dimensions."""
+
+    def dds(self, constraint="", slicing=None):
+        """Generate DDS responses with multiple dimensions."""
+        if dap.meets_constraint(constraint, self.data_path):
+            # Check for slice
+            if slicing is None:
+                slices = dap.parse_slice_constraint(constraint)
+            else:
+                slices = slicing
+
+            yield self.indent + f"{self.dtype()} {self.name}"
+
+            # Yield dimensions
+            for i, dim in enumerate(self.dimensions):
+                sl = slices[i] if i < len(slices) else ...
+                dimlen = int(np.prod(dim.data[sl].shape))
+                yield f"[{dim.name} = {dimlen}]"
+
+            yield ";\n"
+
+
 def dap_grid(da: xr.DataArray, dims: dict[str, dap.Array]) -> dap.Grid:
     """Transform an xarray DataArray into a DAP Grid."""
-    data_grid = dap.Grid(
-        name=da.name,
-        data=da.astype(da.dtype).data,
-        dtype=dap_dtype(da),
-        dimensions=[dims[dim] for dim in da.dims],
-    )
+    encoded_da = encode_da(da)
+
+    dimensions = []
+    use_array = False
+    for dim in da.dims:
+        try:
+            dimensions.append(dims[dim])
+        except KeyError:
+            use_array = True
+            dimensions.append(dap_dimension(da[dim]))
+
+    if len(dimensions) == 0:
+        use_array = True
+
+    dap_kwargs = {
+        "name": da.name,
+        "data": encoded_da.astype(encoded_da.dtype).data,
+        "dtype": dap_dtype(encoded_da),
+        "dimensions": dimensions,
+    }
+
+    if use_array:
+        data_grid = Array(**dap_kwargs)
+    else:
+        data_grid = dap.Grid(**dap_kwargs)
+
+    data_grid.append(*dimensions)
 
     for key, value in da.attrs.items():
         data_grid.append(dap_attribute(key, value))
 
+    try:
+        data_grid.append(dap_attribute("coordinates", da.encoding["coordinates"]))
+    except KeyError:
+        pass
     return data_grid
 
 
@@ -108,7 +167,7 @@ def dap_dataset(ds: xr.Dataset, name: str) -> dap.Dataset:
     dataset = dap.Dataset(name=name)
 
     dims: dict[str, dap.Array] = {}
-    for dim in ds.dims:
+    for dim in ds.coords:
         dims[dim] = dap_dimension(ds[dim])
 
     dataset.append(*dims.values())
@@ -118,6 +177,8 @@ def dap_dataset(ds: xr.Dataset, name: str) -> dap.Dataset:
         dataset.append(data_grid)
 
     for key, value in ds.attrs.items():
+        if key == "_xpublish_id":
+            continue
         dataset.append(dap_attribute(key, value))
 
     return dataset
