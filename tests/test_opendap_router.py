@@ -30,10 +30,13 @@ def test_dds_response(dap_client):
 
     assert "Dataset" in content
     assert "Float32 lat[lat = 25]" in content
-    assert "Float32 time[time = 2920]" in content
+    assert "Float32 time[time = 2]" in content
     assert "Float32 lon[lon = 53]" in content
     assert "Grid {" in content
-    assert "Float64 air[time = 2920][lat = 25][lon = 53]" in content
+    # Float32/64 doesn't seem to be consistent across versions. see https://github.com/pydata/xarray/issues/9041
+    assert ("Float32 air[time = 2][lat = 25][lon = 53]" in content) or (
+        "Float64 air[time = 2][lat = 25][lon = 53]" in content
+    )
 
 
 def test_das_response(dap_client):
@@ -65,7 +68,10 @@ def test_dods_response(dap_client):
 
     assert "Dataset {" in text_content
     assert "Float32 lat[lat = 25]" in text_content
-    assert "Float32 time[time = 2920]" in text_content
+    assert "Float32 time[time = 2]" in text_content
     assert "Float32 lon[lon = 53]" in text_content
     assert "Grid {" in text_content
-    assert "Float64 air[time = 2920][lat = 25][lon = 53]" in text_content
+    # Float32/64 doesn't seem to be consistent across versions. see https://github.com/pydata/xarray/issues/9041
+    assert ("Float32 air[time = 2][lat = 25][lon = 53]" in text_content) or (
+        "Float64 air[time = 2][lat = 25][lon = 53]" in text_content
+    )

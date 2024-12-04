@@ -8,13 +8,13 @@ from xprocess import ProcessStarter
 server_path = Path(__file__).parent / "server.py"
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def xpublish_server(xprocess):
     """Launch an Xpublish server in the background.
 
     Server has the air_temperature tutorial dataset
-    at `air` and has the OpenDAP plugin running with
-    defaults.
+    at `air`, and some other problematic datasets.
+    It has the OpenDAP plugin running with default configuration.
     """
 
     class Starter(ProcessStarter):
@@ -37,10 +37,16 @@ def xpublish_server(xprocess):
 
 
 @pytest.fixture(scope="session")
-def dataset():
-    """Xarray air temperature tutorial dataset."""
-    from xarray.tutorial import open_dataset
+def datasets():
+    """All the served datasets as a dictionary."""
+    from datasets import datasets as datasets_dict
 
-    ds = open_dataset("air_temperature")
+    return datasets_dict
+
+
+@pytest.fixture(scope="session")
+def dataset(datasets):
+    """Xarray air temperature tutorial dataset."""
+    ds = datasets["air"]
 
     return ds

@@ -9,6 +9,8 @@ with open("./.github/workflows/tests.yml") as f:
 python_versions = workflow["jobs"]["run"]["strategy"]["matrix"]["python-version"]
 pydantic_versions = workflow["jobs"]["run"]["strategy"]["matrix"]["pydantic-version"]
 
+nox.options.default_venv_backend = "uv"
+
 
 @nox.session(python=python_versions)
 @nox.parametrize("pydantic", pydantic_versions)
@@ -21,4 +23,5 @@ def tests(session: nox.Session, pydantic: str):
     session.install("-r", "requirements-dev.txt")
     session.install(".")
     session.install(f"pydantic{pydantic}")
+    session.run("uv", "pip", "list")
     session.run("pytest", "--verbose", *session.posargs)
