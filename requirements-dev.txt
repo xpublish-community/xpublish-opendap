@@ -25,3 +25,4 @@ twine
 wheel
 xarray
 xpublish
+zarr>=3.0.7
