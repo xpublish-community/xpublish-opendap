@@ -17,7 +17,7 @@ For `conda` users you can
 conda install --channel conda-forge xpublish-opendap
 ```
 
-or, if you are a `pip` users
+or, if you are a `pip` user
 
 ```shell
 pip install xpublish-opendap
