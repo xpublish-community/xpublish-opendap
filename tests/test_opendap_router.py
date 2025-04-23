@@ -47,12 +47,12 @@ def test_das_response(dap_client):
     assert 'String standard_name "latitude"' in content
     assert 'String standard_name "time"' in content
     assert 'String standard_name "longitude"' in content
-    assert (
-        'String long_name "4xDaily Air temperature at sigma level 995"' in content
-    ), "long_name attribute missing from air DataArray"
-    assert (
-        'String title "4x daily NMC reanalysis (1948)"' in content
-    ), "Global attributes are returned"
+    assert 'String long_name "4xDaily Air temperature at sigma level 995"' in content, (
+        "long_name attribute missing from air DataArray"
+    )
+    assert 'String title "4x daily NMC reanalysis (1948)"' in content, (
+        "Global attributes are returned"
+    )
 
 
 def test_dods_response(dap_client):
@@ -112,12 +112,12 @@ def test_single_das_response(dap_single_client):
     assert 'String standard_name "latitude"' in content
     assert 'String standard_name "time"' in content
     assert 'String standard_name "longitude"' in content
-    assert (
-        'String long_name "4xDaily Air temperature at sigma level 995"' in content
-    ), "long_name attribute missing from air DataArray"
-    assert (
-        'String title "4x daily NMC reanalysis (1948)"' in content
-    ), "Global attributes are returned"
+    assert 'String long_name "4xDaily Air temperature at sigma level 995"' in content, (
+        "long_name attribute missing from air DataArray"
+    )
+    assert 'String title "4x daily NMC reanalysis (1948)"' in content, (
+        "Global attributes are returned"
+    )
 
 
 def test_single_dods_response(dap_single_client):

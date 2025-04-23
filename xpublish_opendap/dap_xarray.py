@@ -3,7 +3,6 @@
 import logging
 from typing import (
     Any,
-    Union,
 )
 
 import numpy as np
@@ -29,7 +28,7 @@ dap_dtypes_dict: dict[np.dtype, type[dap.DAPAtom]] = {
 del dtype_dap
 
 
-def dap_dtype(da: Union[xr.DataArray, xr.Variable]) -> type[dap.DAPAtom]:
+def dap_dtype(da: xr.DataArray | xr.Variable) -> type[dap.DAPAtom]:
     """Return a DAP type for the xr.DataArray."""
     try:
         return dap_dtypes_dict[da.dtype]
