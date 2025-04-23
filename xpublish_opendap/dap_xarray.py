@@ -91,7 +91,7 @@ def dap_grid(da: xr.DataArray, dims: dict[str, dap.Array]) -> dap.Grid:
     """Transform an xarray DataArray into a DAP Grid."""
     data_grid = dap.Grid(
         name=da.name,
-        data=da.astype(da.dtype).data,
+        data=da.data,
         dtype=dap_dtype(da),
         dimensions=[dims[dim] for dim in da.dims],
     )
