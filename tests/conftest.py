@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 from xprocess import ProcessStarter
+from xarray.tutorial import open_dataset
+
 
 server_path = Path(__file__).parent / "server.py"
 
@@ -39,7 +41,6 @@ def xpublish_server(xprocess):
 @pytest.fixture(scope="session")
 def dataset():
     """Xarray air temperature tutorial dataset."""
-    from xarray.tutorial import open_dataset
 
     ds = open_dataset("air_temperature")
 
