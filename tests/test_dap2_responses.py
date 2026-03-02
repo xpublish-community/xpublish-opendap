@@ -373,7 +373,7 @@ class TestDODSTypeEncoding:
 
     @pytest.mark.asyncio
     async def test_bool_encoded_as_byte(self):
-        """bool → DAP_BYTE, packed contiguously and padded."""
+        """Bool → DAP_BYTE, packed contiguously and padded."""
         ds = xr.Dataset(coords={'x': np.array([True, False, True])})
         chunks = []
         async for chunk in generate_dods(ds, 'test'):

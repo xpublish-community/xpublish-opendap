@@ -15,7 +15,7 @@ class TestNcdump:
     """Tests using ncdump to inspect the remote OPeNDAP dataset."""
 
     def test_ncdump_header(self, opendap_base):
-        """ncdump -h prints dimensions and variables."""
+        """Ncdump -h prints dimensions and variables."""
         result = subprocess.run(
             ["ncdump", "-h", opendap_base],
             capture_output=True,
@@ -30,7 +30,7 @@ class TestNcdump:
         assert "air" in stdout
 
     def test_ncdump_variable_slice(self, opendap_base):
-        """ncdump -v lat prints latitude values."""
+        """Ncdump -v lat prints latitude values."""
         result = subprocess.run(
             ["ncdump", "-v", "lat", opendap_base],
             capture_output=True,
@@ -41,7 +41,7 @@ class TestNcdump:
         assert "lat" in result.stdout
 
     def test_ncdump_global_attrs(self, opendap_base):
-        """ncdump -h includes global attributes."""
+        """Ncdump -h includes global attributes."""
         result = subprocess.run(
             ["ncdump", "-h", opendap_base],
             capture_output=True,

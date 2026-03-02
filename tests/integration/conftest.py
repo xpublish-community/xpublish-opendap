@@ -7,7 +7,6 @@ to run real DAP client tests against a live xpublish server.
 import pytest
 import xarray as xr
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

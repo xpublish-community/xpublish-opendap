@@ -17,7 +17,7 @@ class TestNcks:
     """Tests using ncks to query the remote OPeNDAP dataset."""
 
     def test_ncks_metadata(self, opendap_base):
-        """ncks -m lists dimensions and variables."""
+        """Ncks -m lists dimensions and variables."""
         result = subprocess.run(
             ["ncks", "-m", opendap_base],
             capture_output=True,
@@ -32,7 +32,7 @@ class TestNcks:
         assert "air" in stdout
 
     def test_ncks_variable_extract(self, opendap_base, tmp_path):
-        """ncks -v lat extracts latitude to a local file."""
+        """Ncks -v lat extracts latitude to a local file."""
         out_file = tmp_path / "lat.nc"
         result = subprocess.run(
             ["ncks", "-v", "lat", opendap_base, str(out_file)],
@@ -48,7 +48,7 @@ class TestNcks:
         ds.close()
 
     def test_ncks_hyperslab(self, opendap_base, tmp_path):
-        """ncks with -d flags extracts a single-point hyperslab."""
+        """Ncks with -d flags extracts a single-point hyperslab."""
         out_file = tmp_path / "slice.nc"
         result = subprocess.run(
             [
@@ -89,7 +89,7 @@ class TestNcksComparison:
     """Compare ncks output from a local netCDF file vs the OPeNDAP endpoint."""
 
     def test_variable_extract_match(self, reference_nc, opendap_base, tmp_path):
-        """ncks -v lat produces identical values from local file and OPeNDAP."""
+        """Ncks -v lat produces identical values from local file and OPeNDAP."""
         args = ["-v", "lat"]
         ds_local = _run_ncks(args, reference_nc, tmp_path / "local_lat.nc")
         ds_remote = _run_ncks(args, opendap_base, tmp_path / "opendap_lat.nc")

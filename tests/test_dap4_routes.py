@@ -12,7 +12,11 @@ import xpublish
 from fastapi.testclient import TestClient
 
 from xpublish_opendap import OpenDapPlugin
-from xpublish_opendap.dap.dap4.data import CHUNK_END, CHUNK_SIZE_MASK, DMR_DATA_SEPARATOR
+from xpublish_opendap.dap.dap4.data import (
+    CHUNK_END,
+    CHUNK_SIZE_MASK,
+    DMR_DATA_SEPARATOR,
+)
 from xpublish_opendap.dap.dap4.dmr import DAP4_NS
 from xpublish_opendap.dap.dap4.headers import CONTENT_TYPES as DAP4_CONTENT_TYPES
 
@@ -324,7 +328,6 @@ class TestCrossProtocolConsistency:
         # e.g. "Float64 time[time = 3];" → time: 3
         dds_text = dds_resp.text
         dds_dim_sizes = {}
-        import re
         for match in re.finditer(r'\[(\w+) = (\d+)\]', dds_text):
             dim_name = match.group(1)
             dim_size = int(match.group(2))
