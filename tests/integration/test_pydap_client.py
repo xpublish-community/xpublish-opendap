@@ -43,10 +43,6 @@ class TestPydapDAP2:
         ds = _open_dap2(opendap_base)
         assert ds["air"].shape == (2920, 25, 53)
 
-    @pytest.mark.xfail(
-        strict=False,
-        reason="Constrained data fetch via pydap triggers server-side constraint handling issue",
-    )
     def test_dap2_read_data(self, opendap_base, reference_ds):
         """A small data slice matches the reference."""
         ds = _open_dap2(opendap_base)

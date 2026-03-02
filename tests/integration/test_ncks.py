@@ -46,10 +46,6 @@ class TestNcks:
         assert ds.sizes["lat"] == 25
         ds.close()
 
-    @pytest.mark.xfail(
-        strict=False,
-        reason="Constrained data fetch via ncks triggers server-side constraint handling issue",
-    )
     def test_ncks_hyperslab(self, opendap_base, tmp_path):
         """ncks with -d flags extracts a single-point hyperslab."""
         out_file = tmp_path / "slice.nc"

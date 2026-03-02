@@ -131,6 +131,48 @@ class TestPlanSubsetting:
         plan = plan_subsetting(sample_ds, constraint)
         assert plan.estimated_bytes > 0
 
+    def test_grid_array_member_path(self, sample_ds):
+        """Grid-qualified path temp.temp resolves to temp."""
+        constraint = Constraint(projections=[ProjectionItem(name="temp.temp")])
+        plan = plan_subsetting(sample_ds, constraint)
+        assert "temp" in plan.variables
+
+    def test_grid_array_member_with_slices(self, sample_ds):
+        """Grid-qualified path with hyperslabs resolves and applies slices."""
+        constraint = Constraint(
+            projections=[
+                ProjectionItem(
+                    name="temp.temp",
+                    slices=(
+                        HyperSlab(start=0, stop=4, stride=1),
+                        HyperSlab(start=0, stop=2, stride=1),
+                    ),
+                ),
+            ],
+        )
+        plan = plan_subsetting(sample_ds, constraint)
+        assert "temp" in plan.variables
+        assert plan.isel_args["time"] == slice(0, 5, 1)
+        assert plan.isel_args["x"] == slice(0, 3, 1)
+
+    def test_grid_map_member_path(self, sample_ds):
+        """Grid map member path temp.time resolves to coordinate time."""
+        constraint = Constraint(projections=[ProjectionItem(name="temp.time")])
+        plan = plan_subsetting(sample_ds, constraint)
+        assert "time" in plan.variables
+
+    def test_invalid_grid_member_raises(self, sample_ds):
+        """Grid member path temp.nonexistent raises VariableNotFoundError."""
+        constraint = Constraint(projections=[ProjectionItem(name="temp.nonexistent")])
+        with pytest.raises(VariableNotFoundError):
+            plan_subsetting(sample_ds, constraint)
+
+    def test_dotted_name_not_grid_raises(self, sample_ds):
+        """Dotted path x.x where x is a 1-d coord (not a Grid) raises error."""
+        constraint = Constraint(projections=[ProjectionItem(name="x.x")])
+        with pytest.raises(VariableNotFoundError):
+            plan_subsetting(sample_ds, constraint)
+
 
 class TestApplyPlan:
     def test_no_subsetting(self, sample_ds):

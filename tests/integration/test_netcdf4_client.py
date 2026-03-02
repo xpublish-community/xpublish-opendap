@@ -65,10 +65,6 @@ class TestNetCDF4Client:
         )
         ds.close()
 
-    @pytest.mark.xfail(
-        strict=False,
-        reason="Constrained data fetch via netCDF4 triggers server-side constraint handling issue",
-    )
     def test_read_data_slice(self, opendap_base, reference_ds):
         """A single data value matches the reference."""
         ds = _open(opendap_base)

@@ -49,16 +49,15 @@ def plan_subsetting(ds: xr.Dataset, constraint: Constraint) -> SubsettingPlan:
     else:
         plan.variables = []
         for proj in constraint.projections:
-            if proj.name not in all_var_names:
-                raise VariableNotFoundError(proj.name)
-            plan.variables.append(proj.name)
+            resolved = _resolve_grid_path(proj.name, ds, all_var_names)
+            plan.variables.append(resolved)
 
             # Collect dimension slices from hyperslab specifications
             if proj.slices is not None:
-                var = ds[proj.name]
+                var = ds[resolved]
                 if len(proj.slices) != len(var.dims):
                     raise IndexOutOfRangeError(
-                        f"Variable {proj.name!r} has {len(var.dims)} dimensions "
+                        f"Variable {resolved!r} has {len(var.dims)} dimensions "
                         f"but {len(proj.slices)} hyperslab(s) given",
                     )
                 for dim, slab in zip(var.dims, proj.slices):
@@ -124,6 +123,50 @@ def apply_plan(ds: xr.Dataset, plan: SubsettingPlan) -> xr.Dataset:
             result = result.drop_vars(drop_vars)
 
     return result
+
+
+def _resolve_grid_path(name: str, ds: xr.Dataset, all_var_names: set[str]) -> str:
+    """Resolve a possibly Grid-qualified variable path to a dataset variable name.
+
+    DAP2 clients send Grid member paths like ``air.air`` (Array member) or
+    ``air.time`` (Map member) when the DDS declares ``air`` as a Grid type.
+    This resolves such dotted names back to the xarray variable name.
+
+    A variable is emitted as a Grid in the DDS when it is a multi-dimensional
+    data variable (``var.ndim > 0`` and ``var`` is in ``ds.data_vars``).
+
+    Args:
+        name: The projected variable name, possibly dotted (e.g. ``air.air``).
+        ds: The source dataset.
+        all_var_names: Union of ``ds.data_vars`` and ``ds.coords`` names.
+
+    Returns:
+        The resolved xarray variable name.
+
+    Raises:
+        VariableNotFoundError: If the name cannot be resolved.
+    """
+    if '.' not in name:
+        if name not in all_var_names:
+            raise VariableNotFoundError(name)
+        return name
+
+    grid_name, member_name = name.split('.', 1)
+
+    # The grid must be a multi-dimensional data variable
+    if grid_name not in ds.data_vars or ds[grid_name].ndim == 0:
+        raise VariableNotFoundError(name)
+
+    # Array member: <grid>.<grid> → grid_name
+    if member_name == grid_name:
+        return grid_name
+
+    # Map member: <grid>.<dim_coord> → the dimension coordinate name
+    grid_dims = set(ds[grid_name].dims)
+    if member_name in grid_dims and member_name in ds.coords:
+        return member_name
+
+    raise VariableNotFoundError(name)
 
 
 def _validate_hyperslab(slab: HyperSlab, dim: str, dim_size: int) -> None:

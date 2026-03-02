@@ -36,10 +36,6 @@ class TestNetCDF4Engine:
         assert ds.sizes["lon"] == 53
         ds.close()
 
-    @pytest.mark.xfail(
-        strict=False,
-        reason="Constrained data fetch via netcdf4 engine triggers server-side constraint issue",
-    )
     def test_netcdf4_data_values(self, opendap_base, reference_ds):
         """A data slice matches the reference."""
         ds = xr.open_dataset(opendap_base, engine="netcdf4")
@@ -75,10 +71,6 @@ class TestPydapEngine:
         assert ds is not None
         ds.close()
 
-    @pytest.mark.xfail(
-        strict=False,
-        reason="Constrained data fetch via pydap engine triggers server-side constraint issue",
-    )
     def test_pydap_data_values(self, opendap_base, reference_ds):
         """A data slice matches the reference via pydap engine."""
         ds = xr.open_dataset(opendap_base, engine="pydap")
