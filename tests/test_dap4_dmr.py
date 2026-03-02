@@ -340,6 +340,36 @@ class TestMultiTypeAttributes:
                         return
         pytest.fail('py_int attribute not found in DMR')
 
+    def test_complex_ndarray_attr_falls_back_to_string(self):
+        ds = xr.Dataset(
+            {'v': xr.DataArray([1.0], dims=['x'])},
+            coords={'x': [0]},
+            attrs={'c': np.array([1 + 2j])},
+        )
+        root = _parse_dmr(ds)
+        for container in root.findall(f'{{{DAP4_NS}}}Attribute'):
+            if container.get('name') == 'NC_GLOBAL':
+                for attr in container.findall(f'{{{DAP4_NS}}}Attribute'):
+                    if attr.get('name') == 'c':
+                        assert attr.get('type') == 'String'
+                        return
+        pytest.fail('c attribute not found in DMR')
+
+    def test_unknown_type_attr_falls_back_to_string(self):
+        ds = xr.Dataset(
+            {'v': xr.DataArray([1.0], dims=['x'])},
+            coords={'x': [0]},
+            attrs={'s': frozenset([1, 2])},
+        )
+        root = _parse_dmr(ds)
+        for container in root.findall(f'{{{DAP4_NS}}}Attribute'):
+            if container.get('name') == 'NC_GLOBAL':
+                for attr in container.findall(f'{{{DAP4_NS}}}Attribute'):
+                    if attr.get('name') == 's':
+                        assert attr.get('type') == 'String'
+                        return
+        pytest.fail('s attribute not found in DMR')
+
     def test_nan_attr_value(self, attr_ds):
         root = _parse_dmr(attr_ds)
         attr = self._get_nc_global_attr(root, 'nan_attr')

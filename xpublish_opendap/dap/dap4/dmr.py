@@ -149,21 +149,11 @@ def _attribute_dap4_type(value: Any) -> str:
     if isinstance(value, bool):
         return 'UInt8'
     if isinstance(value, np.integer):
-        try:
-            dap_type = resolve_dap_type(np.dtype(type(value)), protocol='dap4')
-            assert dap_type.dap4_name is not None
-            return dap_type.dap4_name
-        except (ValueError, KeyError):
-            return 'Int32'
+        return resolve_dap_type(np.dtype(type(value)), protocol='dap4').dap4_name
     if isinstance(value, int):
         return 'Int64'
     if isinstance(value, np.floating):
-        try:
-            dap_type = resolve_dap_type(np.dtype(type(value)), protocol='dap4')
-            assert dap_type.dap4_name is not None
-            return dap_type.dap4_name
-        except (ValueError, KeyError):
-            return 'Float64'
+        return resolve_dap_type(np.dtype(type(value)), protocol='dap4').dap4_name
     if isinstance(value, float):
         return 'Float64'
     if isinstance(value, np.ndarray):

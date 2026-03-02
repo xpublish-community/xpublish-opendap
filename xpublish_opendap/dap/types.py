@@ -182,23 +182,6 @@ def resolve_dap_type(  # noqa: PLR0911, PLR0912
         # Fallback by kind and itemsize
         if dtype.kind == "f":
             return DAP_FLOAT64 if dtype.itemsize >= 8 else DAP_FLOAT32  # noqa: PLR2004
-        if dtype.kind == "i":
-            if dtype.itemsize >= 8:  # noqa: PLR2004
-                return DAP_INT64
-            if dtype.itemsize >= 4:  # noqa: PLR2004
-                return DAP_INT32
-            if dtype.itemsize >= 2:  # noqa: PLR2004
-                return DAP_INT16
-            return DAP_INT8
-        if dtype.kind == "u":
-            if dtype.itemsize >= 8:  # noqa: PLR2004
-                return DAP_UINT64
-            if dtype.itemsize >= 4:  # noqa: PLR2004
-                return DAP_UINT32
-            if dtype.itemsize >= 2:  # noqa: PLR2004
-                return DAP_UINT16
-            return DAP_BYTE
-
         raise ValueError(f"No DAP4 mapping for numpy dtype {dtype!r}")
 
     # DAP2
@@ -209,9 +192,6 @@ def resolve_dap_type(  # noqa: PLR0911, PLR0912
     # Try to match by kind and itemsize for less common dtypes
     if dtype.kind == "f":
         return DAP_FLOAT64 if dtype.itemsize >= 8 else DAP_FLOAT32
-    if dtype.kind in ("i", "u"):
-        return DAP_FLOAT64 if dtype.itemsize >= 8 else DAP_INT32
-
     raise ValueError(f"No DAP2 mapping for numpy dtype {dtype!r}")
 
 

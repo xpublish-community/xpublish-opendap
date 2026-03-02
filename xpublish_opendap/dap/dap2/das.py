@@ -77,19 +77,11 @@ def _attribute_type_name(value: Any) -> str:
     if isinstance(value, bool):
         return "Byte"
     if isinstance(value, np.integer):
-        try:
-            dap_type = resolve_dap_type(np.dtype(type(value)))
-            return dap_type.dap2_name
-        except (ValueError, KeyError):
-            return "Int32"
+        return resolve_dap_type(np.dtype(type(value))).dap2_name
     if isinstance(value, int):
         return "Int32"
     if isinstance(value, np.floating):
-        try:
-            dap_type = resolve_dap_type(np.dtype(type(value)))
-            return dap_type.dap2_name
-        except (ValueError, KeyError):
-            return "Float64"
+        return resolve_dap_type(np.dtype(type(value))).dap2_name
     if isinstance(value, float):
         return "Float64"
     if isinstance(value, np.ndarray):

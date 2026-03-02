@@ -60,29 +60,8 @@ class _Parser:
         self.raw = raw
         self.pos = 0
 
-    @property
-    def remaining(self) -> str:
-        return self.raw[self.pos :]
-
     def at_end(self) -> bool:
         return self.pos >= len(self.raw)
-
-    def peek(self) -> str:
-        if self.at_end():
-            return ""
-        return self.raw[self.pos]
-
-    def advance(self) -> str:
-        ch = self.raw[self.pos]
-        self.pos += 1
-        return ch
-
-    def expect(self, ch: str) -> None:
-        if self.at_end() or self.raw[self.pos] != ch:
-            raise ConstraintSyntaxError(
-                f"Expected {ch!r} at position {self.pos}, got {self.peek()!r}",
-            )
-        self.pos += 1
 
     def parse(self) -> Constraint:
         """Parse the full constraint expression."""
@@ -103,8 +82,7 @@ class _Parser:
 
             # Remaining parts are selection clauses
             for sel_str in parts[1:]:
-                clause = self._parse_selection(sel_str)
-                constraint.selections.append(clause)
+                self._parse_selection(sel_str)
 
         return constraint
 

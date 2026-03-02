@@ -111,10 +111,8 @@ def _xdr_encode_array(data: np.ndarray, dap_type: DapType) -> Iterator[bytes]:
 
     # Length prefix: sent twice for atomic arrays in DAP2
     length_bytes = _xdr_length_prefix(n)
-    if dap_type.needs_xdr_length_doubled:
-        yield length_bytes + length_bytes
-    else:
-        yield length_bytes
+    # All non-string types double the length prefix in DAP2 XDR encoding
+    yield length_bytes + length_bytes
 
     if dap_type is DAP_BYTE:
         # Byte arrays: pack contiguously and pad to 4-byte boundary
