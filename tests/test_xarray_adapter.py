@@ -174,6 +174,112 @@ class TestPlanSubsetting:
             plan_subsetting(sample_ds, constraint)
 
 
+class TestEdgeCaseSubsetting:
+    """Edge-case subsetting plans."""
+
+    def test_single_element_hyperslab(self, sample_ds):
+        """[0:0] should select exactly 1 element."""
+        constraint = Constraint(
+            projections=[
+                ProjectionItem(
+                    name="temp",
+                    slices=(
+                        HyperSlab(start=0, stop=0, stride=1),
+                        HyperSlab(start=0, stop=0, stride=1),
+                    ),
+                ),
+            ],
+        )
+        plan = plan_subsetting(sample_ds, constraint)
+        result = apply_plan(sample_ds, plan)
+        assert result.sizes["time"] == 1
+        assert result.sizes["x"] == 1
+
+    def test_large_stride_single_output(self, sample_ds):
+        """Stride larger than range should yield 1 element."""
+        constraint = Constraint(
+            projections=[
+                ProjectionItem(
+                    name="temp",
+                    slices=(
+                        HyperSlab(start=0, stop=3, stride=100),
+                        HyperSlab(start=0, stop=4, stride=1),
+                    ),
+                ),
+            ],
+        )
+        plan = plan_subsetting(sample_ds, constraint)
+        result = apply_plan(sample_ds, plan)
+        assert result.sizes["time"] == 1
+        assert result.sizes["x"] == 5
+
+    def test_start_equals_stop(self, sample_ds):
+        """[3:3] is valid and selects index 3."""
+        constraint = Constraint(
+            projections=[
+                ProjectionItem(
+                    name="temp",
+                    slices=(
+                        HyperSlab(start=3, stop=3, stride=1),
+                        HyperSlab(start=0, stop=4, stride=1),
+                    ),
+                ),
+            ],
+        )
+        plan = plan_subsetting(sample_ds, constraint)
+        result = apply_plan(sample_ds, plan)
+        assert result.sizes["time"] == 1
+
+    def test_mixed_constrained_unconstrained(self, sample_ds):
+        """One variable sliced, one variable bare."""
+        constraint = Constraint(
+            projections=[
+                ProjectionItem(
+                    name="temp",
+                    slices=(
+                        HyperSlab(start=0, stop=4, stride=1),
+                        HyperSlab(start=0, stop=2, stride=1),
+                    ),
+                ),
+                ProjectionItem(name="time"),
+            ],
+        )
+        plan = plan_subsetting(sample_ds, constraint)
+        assert "temp" in plan.variables
+        assert "time" in plan.variables
+        # Slices should still be applied
+        assert "time" in plan.isel_args
+        result = apply_plan(sample_ds, plan)
+        assert "temp" in result
+
+    def test_coord_auto_inclusion_for_data_var(self, sample_ds):
+        """Projecting only 'temp' auto-adds 'time' and 'x' coords."""
+        constraint = Constraint(projections=[ProjectionItem(name="temp")])
+        plan = plan_subsetting(sample_ds, constraint)
+        assert "temp" in plan.variables
+        assert "time" in plan.variables
+        assert "x" in plan.variables
+
+    def test_single_dim_dataset(self):
+        """Dataset with a single dimension, hyperslab [0:0]."""
+        ds = xr.Dataset(
+            {"v": xr.DataArray(np.array([42.0], dtype="float64"), dims=["t"])},
+            coords={"t": np.array([0])},
+        )
+        constraint = Constraint(
+            projections=[
+                ProjectionItem(
+                    name="v",
+                    slices=(HyperSlab(start=0, stop=0, stride=1),),
+                ),
+            ],
+        )
+        plan = plan_subsetting(ds, constraint)
+        result = apply_plan(ds, plan)
+        assert result.sizes["t"] == 1
+        assert float(result["v"].values[0]) == 42.0
+
+
 class TestApplyPlan:
     def test_no_subsetting(self, sample_ds):
         from xpublish_opendap.dap.xarray_adapter import SubsettingPlan

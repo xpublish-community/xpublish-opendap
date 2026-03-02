@@ -295,6 +295,131 @@ class TestLengthPrefix:
         np.testing.assert_array_equal(values, [1.0, 2.0, 3.0])
 
 
+class TestInt32Encoding:
+    @pytest.mark.asyncio
+    async def test_int32_values(self):
+        ds = xr.Dataset(coords={'x': np.array([100000, -100000], dtype='int32')})
+        data = await _collect_dap4(ds)
+        _, binary = _split_dmr_and_binary(data)
+
+        raw = struct.unpack('>I', binary[0:4])[0]
+        size = raw & CHUNK_SIZE_MASK
+        chunk_data = binary[4 : 4 + size]
+
+        # uint64 length prefix (8) + 2 * 4 bytes = 16
+        assert size == 16
+
+        n = struct.unpack('<Q', chunk_data[0:8])[0]
+        assert n == 2
+
+        values = np.frombuffer(chunk_data[8:16], dtype=np.int32)
+        np.testing.assert_array_equal(values, [100000, -100000])
+
+
+class TestUInt32Encoding:
+    @pytest.mark.asyncio
+    async def test_uint32_values(self):
+        ds = xr.Dataset(coords={'x': np.array([3_000_000_000, 1], dtype='uint32')})
+        data = await _collect_dap4(ds)
+        _, binary = _split_dmr_and_binary(data)
+
+        raw = struct.unpack('>I', binary[0:4])[0]
+        size = raw & CHUNK_SIZE_MASK
+        chunk_data = binary[4 : 4 + size]
+
+        assert size == 16
+
+        n = struct.unpack('<Q', chunk_data[0:8])[0]
+        assert n == 2
+
+        values = np.frombuffer(chunk_data[8:16], dtype=np.uint32)
+        np.testing.assert_array_equal(values, [3_000_000_000, 1])
+
+
+class TestInt8Encoding:
+    @pytest.mark.asyncio
+    async def test_int8_natural_size(self):
+        """DAP4 Int8 should use natural 1-byte size."""
+        ds = xr.Dataset(coords={'x': np.array([-1, 0, 1], dtype='int8')})
+        data = await _collect_dap4(ds)
+        _, binary = _split_dmr_and_binary(data)
+
+        raw = struct.unpack('>I', binary[0:4])[0]
+        size = raw & CHUNK_SIZE_MASK
+
+        # uint64 (8) + 3 * 1 byte = 11
+        assert size == 11
+
+        chunk_data = binary[4 : 4 + size]
+        n = struct.unpack('<Q', chunk_data[0:8])[0]
+        assert n == 3
+
+        values = np.frombuffer(chunk_data[8:11], dtype=np.int8)
+        np.testing.assert_array_equal(values, [-1, 0, 1])
+
+
+class TestUInt16Encoding:
+    @pytest.mark.asyncio
+    async def test_uint16_natural_size(self):
+        """DAP4 UInt16 should use natural 2-byte size."""
+        ds = xr.Dataset(coords={'x': np.array([1000, 2000], dtype='uint16')})
+        data = await _collect_dap4(ds)
+        _, binary = _split_dmr_and_binary(data)
+
+        raw = struct.unpack('>I', binary[0:4])[0]
+        size = raw & CHUNK_SIZE_MASK
+
+        # uint64 (8) + 2 * 2 bytes = 12
+        assert size == 12
+
+        chunk_data = binary[4 : 4 + size]
+        n = struct.unpack('<Q', chunk_data[0:8])[0]
+        assert n == 2
+
+        values = np.frombuffer(chunk_data[8:12], dtype=np.uint16)
+        np.testing.assert_array_equal(values, [1000, 2000])
+
+
+class TestBoolEncoding:
+    @pytest.mark.asyncio
+    async def test_bool_as_uint8(self):
+        """DAP4 bool → UInt8, 1 byte per element, no padding."""
+        ds = xr.Dataset(coords={'x': np.array([True, False, True])})
+        data = await _collect_dap4(ds)
+        _, binary = _split_dmr_and_binary(data)
+
+        raw = struct.unpack('>I', binary[0:4])[0]
+        size = raw & CHUNK_SIZE_MASK
+
+        # uint64 (8) + 3 * 1 byte = 11 (no padding)
+        assert size == 11
+
+        chunk_data = binary[4 : 4 + size]
+        values = np.frombuffer(chunk_data[8:11], dtype=np.uint8)
+        np.testing.assert_array_equal(values, [1, 0, 1])
+
+
+class TestUInt64MaxEncoding:
+    @pytest.mark.asyncio
+    async def test_uint64_max_roundtrip(self):
+        """uint64 max value (18446744073709551615) should round-trip."""
+        max_val = np.uint64(np.iinfo(np.uint64).max)
+        ds = xr.Dataset(coords={'x': np.array([max_val, np.uint64(0)], dtype='uint64')})
+        data = await _collect_dap4(ds)
+        _, binary = _split_dmr_and_binary(data)
+
+        raw = struct.unpack('>I', binary[0:4])[0]
+        size = raw & CHUNK_SIZE_MASK
+        chunk_data = binary[4 : 4 + size]
+
+        n = struct.unpack('<Q', chunk_data[0:8])[0]
+        assert n == 2
+
+        values = np.frombuffer(chunk_data[8:24], dtype=np.uint64)
+        assert values[0] == np.iinfo(np.uint64).max
+        assert values[1] == 0
+
+
 class TestScalarEncoding:
     @pytest.mark.asyncio
     async def test_scalar_encoded_as_single_element(self):

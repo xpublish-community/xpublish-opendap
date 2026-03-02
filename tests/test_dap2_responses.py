@@ -238,6 +238,157 @@ class TestDODS:
         assert binary[11:12] == b"\x00"  # padding
 
 
+class TestDODSTypeEncoding:
+    """Tests for XDR encoding of non-float types in _xdr_encode_array."""
+
+    @pytest.mark.asyncio
+    async def test_int16_widened_to_4_bytes(self):
+        ds = xr.Dataset(coords={'x': np.array([100, -200], dtype='int16')})
+        chunks = []
+        async for chunk in generate_dods(ds, 'test'):
+            chunks.append(chunk)
+        binary = b''.join(chunks).split(DATA_SEPARATOR)[1]
+
+        # Length prefix twice
+        n1, n2 = struct.unpack('>II', binary[0:8])
+        assert n1 == 2
+        assert n2 == 2
+
+        # Each int16 widened to 4 bytes (big-endian int32)
+        vals = struct.unpack('>2i', binary[8:16])
+        assert vals == (100, -200)
+
+    @pytest.mark.asyncio
+    async def test_uint16_widened_to_4_bytes(self):
+        ds = xr.Dataset(coords={'x': np.array([1000, 2000], dtype='uint16')})
+        chunks = []
+        async for chunk in generate_dods(ds, 'test'):
+            chunks.append(chunk)
+        binary = b''.join(chunks).split(DATA_SEPARATOR)[1]
+
+        n1, n2 = struct.unpack('>II', binary[0:8])
+        assert n1 == 2
+        assert n2 == 2
+
+        vals = struct.unpack('>2I', binary[8:16])
+        assert vals == (1000, 2000)
+
+    @pytest.mark.asyncio
+    async def test_int32_encoding(self):
+        ds = xr.Dataset(coords={'x': np.array([100000, -100000], dtype='int32')})
+        chunks = []
+        async for chunk in generate_dods(ds, 'test'):
+            chunks.append(chunk)
+        binary = b''.join(chunks).split(DATA_SEPARATOR)[1]
+
+        n1, n2 = struct.unpack('>II', binary[0:8])
+        assert n1 == 2
+        vals = struct.unpack('>2i', binary[8:16])
+        assert vals == (100000, -100000)
+
+    @pytest.mark.asyncio
+    async def test_uint32_encoding(self):
+        ds = xr.Dataset(coords={'x': np.array([3_000_000_000, 1], dtype='uint32')})
+        chunks = []
+        async for chunk in generate_dods(ds, 'test'):
+            chunks.append(chunk)
+        binary = b''.join(chunks).split(DATA_SEPARATOR)[1]
+
+        n1, n2 = struct.unpack('>II', binary[0:8])
+        assert n1 == 2
+        vals = struct.unpack('>2I', binary[8:16])
+        assert vals == (3_000_000_000, 1)
+
+    @pytest.mark.asyncio
+    async def test_int8_encoded_as_byte(self):
+        """int8 maps to DAP_INT16 which has xdr_wire_size=4, so it gets widened."""
+        ds = xr.Dataset(coords={'x': np.array([-1, 0, 1], dtype='int8')})
+        chunks = []
+        async for chunk in generate_dods(ds, 'test'):
+            chunks.append(chunk)
+        binary = b''.join(chunks).split(DATA_SEPARATOR)[1]
+
+        n1, n2 = struct.unpack('>II', binary[0:8])
+        assert n1 == 3
+        assert n2 == 3
+
+        # int8 → DAP_INT16 → widened to >i4
+        vals = struct.unpack('>3i', binary[8:20])
+        assert vals == (-1, 0, 1)
+
+    @pytest.mark.asyncio
+    async def test_string_array_encoding(self):
+        ds = xr.Dataset(
+            {'s': xr.DataArray(np.array(['hi', 'bye'], dtype=object), dims=['x'])},
+            coords={'x': np.array([0, 1], dtype='int32')},
+        )
+        chunks = []
+        async for chunk in generate_dods(ds, 'test'):
+            chunks.append(chunk)
+        binary = b''.join(chunks).split(DATA_SEPARATOR)[1]
+
+        # Skip x coord (int32: length*2 + 2*4 = 16 bytes)
+        # Then Grid for s: main array (string) + map (x again)
+        # x coord: 8 (prefix) + 8 (data) = 16
+        offset = 16
+
+        # String array: length prefix once (not doubled)
+        n = struct.unpack('>I', binary[offset : offset + 4])[0]
+        assert n == 2
+        offset += 4
+
+        # First string: "hi" (length=2, padded to 4)
+        slen = struct.unpack('>I', binary[offset : offset + 4])[0]
+        assert slen == 2
+        offset += 4
+        assert binary[offset : offset + 2] == b'hi'
+        offset += 2
+        # Padding to 4-byte boundary
+        assert binary[offset : offset + 2] == b'\x00\x00'
+        offset += 2
+
+        # Second string: "bye" (length=3, padded to 4)
+        slen = struct.unpack('>I', binary[offset : offset + 4])[0]
+        assert slen == 3
+        offset += 4
+        assert binary[offset : offset + 3] == b'bye'
+        offset += 3
+        assert binary[offset : offset + 1] == b'\x00'
+
+    @pytest.mark.asyncio
+    async def test_scalar_dods_encoding(self):
+        """Scalar values get reshaped to 1-element arrays."""
+        ds = xr.Dataset({'value': xr.DataArray(np.int32(42))})
+        chunks = []
+        async for chunk in generate_dods(ds, 'test'):
+            chunks.append(chunk)
+        binary = b''.join(chunks).split(DATA_SEPARATOR)[1]
+
+        # Scalar: length prefix (1) twice, then 4-byte big-endian int32
+        n1, n2 = struct.unpack('>II', binary[0:8])
+        assert n1 == 1
+        assert n2 == 1
+        val = struct.unpack('>i', binary[8:12])[0]
+        assert val == 42
+
+    @pytest.mark.asyncio
+    async def test_bool_encoded_as_byte(self):
+        """bool → DAP_BYTE, packed contiguously and padded."""
+        ds = xr.Dataset(coords={'x': np.array([True, False, True])})
+        chunks = []
+        async for chunk in generate_dods(ds, 'test'):
+            chunks.append(chunk)
+        binary = b''.join(chunks).split(DATA_SEPARATOR)[1]
+
+        n1, n2 = struct.unpack('>II', binary[0:8])
+        assert n1 == 3
+        assert n2 == 3
+
+        # 3 bytes of data + 1 byte padding
+        assert binary[8:11] == bytes([1, 0, 1])
+        assert binary[11:12] == b'\x00'  # padding
+
+
 class TestResponses:
     def test_error_response(self):
         text = "".join(generate_error(1000, "Bad constraint"))
@@ -261,6 +412,134 @@ class TestResponses:
         assert ".dds" in html
         assert ".das" in html
         assert ".dods" in html
+
+    def test_error_structure_complete(self):
+        text = "".join(generate_error(1000, "Bad constraint"))
+        lines = text.split("\n")
+        assert lines[0] == "Error {"
+        assert lines[1].strip() == "code = 1000;"
+        assert lines[2].strip() == 'message = "Bad constraint";'
+        assert lines[3] == "};"
+
+    def test_error_code_types(self):
+        for code, msg in [
+            (1000, "syntax error"),
+            (1001, "not supported"),
+            (1002, "not found"),
+            (1003, "out of range"),
+            (1004, "too large"),
+        ]:
+            text = "".join(generate_error(code, msg))
+            assert f"code = {code}" in text
+            assert f'message = "{msg}"' in text
+
+
+class TestMultiTypeDDS:
+    """Verify generate_dds produces correct DAP2 type names for all dtypes."""
+
+    def test_int8_maps_to_int16(self, multi_type_ds):
+        dds = "".join(generate_dds(multi_type_ds, "test"))
+        # int8 → DAP_INT16 → "Int16" in DDS
+        assert "Int16 i8_var" in dds
+
+    def test_int16_type(self, multi_type_ds):
+        dds = "".join(generate_dds(multi_type_ds, "test"))
+        assert "Int16 i16_var" in dds
+
+    def test_uint16_type(self, multi_type_ds):
+        dds = "".join(generate_dds(multi_type_ds, "test"))
+        assert "UInt16 u16_var" in dds
+
+    def test_int32_type(self, multi_type_ds):
+        dds = "".join(generate_dds(multi_type_ds, "test"))
+        assert "Int32 i32_var" in dds
+
+    def test_uint32_type(self, multi_type_ds):
+        dds = "".join(generate_dds(multi_type_ds, "test"))
+        assert "UInt32 u32_var" in dds
+
+    def test_int64_maps_to_float64(self, multi_type_ds):
+        dds = "".join(generate_dds(multi_type_ds, "test"))
+        # int64 → DAP_FLOAT64 → "Float64" in DAP2
+        assert "Float64 i64_var" in dds
+
+    def test_bool_maps_to_byte(self, multi_type_ds):
+        dds = "".join(generate_dds(multi_type_ds, "test"))
+        assert "Byte bool_var" in dds
+
+    def test_string_type(self, multi_type_ds):
+        dds = "".join(generate_dds(multi_type_ds, "test"))
+        assert "String str_var" in dds
+
+    def test_coord_int32_type(self, multi_type_ds):
+        dds = "".join(generate_dds(multi_type_ds, "test"))
+        assert "Int32 x[x = 2]" in dds
+        assert "Int32 y[y = 2]" in dds
+
+    def test_datetime_coord_is_numeric(self, multi_type_ds):
+        dds = "".join(generate_dds(multi_type_ds, "test"))
+        # After CF encoding, datetime64 becomes float64 or int64 → numeric type
+        # Should NOT contain "datetime" in the DDS type
+        assert "time_coord" in dds
+        # The CF-encoded type should be numeric (Float64 or Int64)
+        lines = [l for l in dds.split('\n') if 'time_coord' in l]
+        for line in lines:
+            assert 'Float64' in line or 'Int64' in line or 'Int32' in line
+
+
+class TestMultiTypeDAS:
+    """Verify generate_das handles edge-case global attributes."""
+
+    def test_array_attr(self, multi_type_ds):
+        das = "".join(generate_das(multi_type_ds))
+        assert "Float64 array_attr 1.0, 2.0, 3.0" in das
+
+    def test_bool_attr(self, multi_type_ds):
+        das = "".join(generate_das(multi_type_ds))
+        assert "Byte bool_attr 1" in das
+
+    def test_nan_attr(self, multi_type_ds):
+        das = "".join(generate_das(multi_type_ds))
+        assert "Float64 nan_attr nan" in das
+
+    def test_inf_attr(self, multi_type_ds):
+        das = "".join(generate_das(multi_type_ds))
+        assert "Float64 inf_attr inf" in das
+
+    def test_empty_str_attr(self, multi_type_ds):
+        das = "".join(generate_das(multi_type_ds))
+        assert 'String empty_str_attr ""' in das
+
+    def test_list_int_attr(self, multi_type_ds):
+        das = "".join(generate_das(multi_type_ds))
+        assert "Float64 list_int_attr 10, 20, 30" in das
+
+    def test_list_str_attr(self, multi_type_ds):
+        das = "".join(generate_das(multi_type_ds))
+        assert 'String list_str_attr "alpha", "beta"' in das
+
+
+class TestMultiTypeDODS:
+    """End-to-end DODS with multi_type_ds."""
+
+    @pytest.mark.asyncio
+    async def test_all_vars_in_dds_text(self, multi_type_ds):
+        chunks = []
+        async for chunk in generate_dods(multi_type_ds, 'test'):
+            chunks.append(chunk)
+        data = b''.join(chunks)
+        dds_text = data.split(DATA_SEPARATOR)[0].decode('utf-8')
+        for var_name in multi_type_ds.data_vars:
+            assert var_name in dds_text
+
+    @pytest.mark.asyncio
+    async def test_binary_data_non_empty(self, multi_type_ds):
+        chunks = []
+        async for chunk in generate_dods(multi_type_ds, 'test'):
+            chunks.append(chunk)
+        data = b''.join(chunks)
+        binary = data.split(DATA_SEPARATOR)[1]
+        assert len(binary) > 0
 
 
 class TestHeaders:

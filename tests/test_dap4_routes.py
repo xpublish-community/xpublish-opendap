@@ -220,6 +220,59 @@ class TestDAP4ErrorHandling:
         assert root.tag == f'{{{DAP4_NS}}}Error'
 
 
+class TestDAP4ErrorResponseBody:
+    """Validate structure and content of DAP4 error XML responses."""
+
+    def test_error_root_element(self, client):
+        resp = client.get('/datasets/test/opendap.dmr?dap4.ce=/nonexistent')
+        root = ET.fromstring(resp.text)
+        assert root.tag == f'{{{DAP4_NS}}}Error'
+        assert 'httpcode' in root.attrib
+
+    def test_error_code_element(self, client):
+        resp = client.get('/datasets/test/opendap.dmr?dap4.ce=/nonexistent')
+        root = ET.fromstring(resp.text)
+        error_code = root.find(f'{{{DAP4_NS}}}ErrorCode')
+        assert error_code is not None
+        assert error_code.text == '1002'
+
+    def test_error_message_element(self, client):
+        resp = client.get('/datasets/test/opendap.dmr?dap4.ce=/nonexistent')
+        root = ET.fromstring(resp.text)
+        message = root.find(f'{{{DAP4_NS}}}Message')
+        assert message is not None
+        assert 'nonexistent' in message.text
+
+    def test_variable_not_found_error_content(self, client):
+        resp = client.get('/datasets/test/opendap.dap?dap4.ce=/missing_var')
+        assert resp.status_code == 400
+        root = ET.fromstring(resp.text)
+        error_code = root.find(f'{{{DAP4_NS}}}ErrorCode')
+        assert error_code.text == '1002'
+        message = root.find(f'{{{DAP4_NS}}}Message')
+        assert 'missing_var' in message.text
+
+    def test_413_error_httpcode(self):
+        """Memory limit error should have httpcode='413' and code 1004."""
+        ds_big = xr.Dataset(
+            {'big': xr.DataArray(np.zeros((100, 100), dtype='float64'), dims=['y', 'x'])},
+            coords={
+                'y': np.arange(100, dtype='float64'),
+                'x': np.arange(100, dtype='float64'),
+            },
+        )
+        plugin = OpenDapPlugin(max_request_memory_bytes=1)
+        rest = xpublish.Rest({'test': ds_big}, plugins={'opendap': plugin})
+        c = TestClient(rest.app)
+
+        resp = c.get('/datasets/test/opendap.dap')
+        assert resp.status_code == 413
+        root = ET.fromstring(resp.text)
+        assert root.get('httpcode') == '413'
+        error_code = root.find(f'{{{DAP4_NS}}}ErrorCode')
+        assert error_code.text == '1004'
+
+
 class TestHelpIncludesDAP4:
     def test_help_mentions_dap4(self, client):
         resp = client.get('/datasets/test/opendap.help')
