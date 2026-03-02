@@ -1,55 +1,111 @@
-# xpublish-opendap: Deferred Work
+# xpublish-opendap: Future Work
 
-## DAP2 Sequence Support
+Items that could be implemented in future efforts. Features that have no xarray
+equivalent (Sequence, nested Structure, Enum, Opaque, Group hierarchy) are
+omitted — see docs/FEATURE_COMPLETENESS.md §"Not Applicable" for rationale.
 
-Sequences are a DAP2 constructor type representing variable-length ordered
-collections of records (like database tables). They are used by some
-oceanographic datasets (e.g. Argo profiles, IOOS buoy data).
+## Response Compression
 
-Full Sequence support requires:
-- Sequence wire encoding: 0x5A start-of-instance marker, 0xA5 end-of-sequence
-  marker, both XDR-encoded (padded to 4 bytes)
-- Nested Sequences (inner sequence per outer instance, at most one per level)
-- DDS/DAS representation of Sequence types
-- Selection constraint filtering on Sequences (the only type that supports
-  selection in DAP2): relational operators (<, <=, >, >=, =, !=, =~) on
-  atomic-typed fields, combined with logical AND across sub-expressions
-- Multi-valued selection constants: {val1, val2, ...} syntax (OR within a
-  single sub-expression)
-- Mapping from xarray to Sequence semantics (no direct equivalent — likely
-  requires explicit user annotation or a convention for tabular data)
+Add `Content-Encoding: deflate` (or gzip) support for DDS, DAS, DMR, and DODS
+responses. The spec allows it and Hyrax enables it by default. Would reduce
+bandwidth for large metadata responses and text-heavy payloads. Binary DODS/DAP
+data benefits less since scientific data often has low compressibility.
 
-The architecture must support adding Sequences without restructuring the encoder
-or constraint parser. Specifically:
-- The constraint parser should already handle "&" selection clauses (parse but
-  raise "not supported" until implemented)
-- The encoder's type dispatch should have a Sequence branch (raise
-  NotImplementedError until implemented)
-- The DDS/DAS generators should handle Sequence declarations
+## DAP4 In-Band Error Chunks
 
-## DAP2 Server-Side Functions
+When an error occurs mid-stream during a DAP4 data response (e.g. I/O failure
+after the first variable has already been flushed), the spec calls for a
+CHUNK_ERR (0x02) chunk containing the error message. Currently the plugin can
+only error before streaming begins or silently truncate.
 
-Server-side functions appear in projection or selection clauses of constraint
-expressions. The spec allows arbitrary functions but does not mandate any.
+## DAP4 Error Context Elements
 
-Support requires:
-- Function call syntax in constraint parser: id(arg1, arg2, ...)
-- Registry / plugin mechanism for user-defined functions
-- In projection: function return value treated as top-level variable
-- In selection: function returning atomic type for relational sub-expressions,
-  or integer (0=false, nonzero=true) as entire sub-expression
-- Error handling: function errors must produce DAP Error response (no partial
-  responses)
+The DAP4 error XML supports optional `<Context>` and `<OtherInformation>`
+children for richer diagnostics (e.g. parse position, stack trace). Currently
+only `<ErrorCode>` and `<Message>` are emitted.
+
+## DAP4 Open-Ended Hyperslab Ranges
+
+The DAP4 CE spec allows `[start:]` (to end of dimension) and `[start:stride:]`
+(strided to end). The parser currently requires explicit stop values. Adding
+this would resolve the dimension size at plan time.
+
+## DAP4 Shared Dimension Slicing
+
+DAP4 CEs can declare dimension slices before variable selections:
+`nlat=[0:9];nlon=[10:19];temp`. This applies the slice to any variable using
+those dimensions. Would require the constraint parser to handle a leading
+`dimensions ";" clauses` production.
+
+## Server-Side Functions
+
+The DAP2/DAP4 specs allow arbitrary server-side functions in constraint
+expressions. The most commonly used are:
+
+- `geogrid(var, N_lat, W_lon, S_lat, E_lon)` — geographic bounding box
+- `grid(var, map_expr1, map_expr2, ...)` — subsample by coordinate values
+- `linear_scale(var, m, b)` — apply y = mx + b transformation
+
+Implementation requires:
+- Function call syntax in constraint parser: `id(arg1, arg2, ...)`
+- A registry / plugin mechanism for user-defined functions
+- Error handling: function errors must produce a DAP Error response
+
+The constraint parser already detects and rejects function calls with a clear
+error message, so adding support is additive.
+
+## Selection Constraints (Row Filtering)
+
+DAP2 selection clauses (`&temp>20.0&lat>-30`) filter array values by condition.
+These are primarily useful for Sequence types (which have no xarray equivalent),
+but the spec allows them on arrays too. For xarray, this would map to boolean
+indexing (`ds.where(ds.temp > 20)`).
+
+Implementation requires:
+- Parsing relational operators (<, <=, >, >=, =, !=, =~) and constants
+- Multi-valued constants: `{val1, val2, ...}` (OR semantics)
+- Applying filters to the xarray subsetting plan
+
+The constraint parser already detects `&` selection clauses and raises
+ConstraintNotSupportedError, so the hook point exists.
+
+## Optional DAP2 Response Types
+
+### DDX (`.ddx`)
+Combined DDS + DAS in XML format. A pre-DAP4 extension, largely superseded by
+DMR. Low priority since DMR serves the same purpose better.
+
+### ASCII (`.asc` / `.ascii`)
+Human-readable comma-delimited data output. Useful for quick inspection without
+a DAP client. Moderate priority.
+
+### HTML Form (`.html`)
+Interactive web form for building constraint expressions and browsing dataset
+structure. Commonly expected by users familiar with Hyrax/THREDDS. This is a
+UI feature with no protocol implications.
+
+### Info (`.info`)
+Combined DDS + DAS rendered as human-readable HTML. Similar to the existing
+`.help` endpoint but with dataset-specific metadata. Low priority.
 
 ## DAP4 Async Response Extension
 
-DAP4 defines an optional async response protocol (HTTP 202 Accepted + polling)
-for near-line data and long-processing operations. Not needed for xpublish's
-synchronous request model but may be useful for very large dataset access
-patterns in the future.
+DAP4 defines an optional async protocol (HTTP 202 Accepted + polling) for
+long-running requests. Not needed for xpublish's synchronous model but could be
+useful for very large dataset access patterns (e.g. server-side aggregation or
+regridding).
 
-## HTML Dataset Browser
+## `Last-Modified` Header
 
-A human-browsable HTML interface for exploring dataset structure and requesting
-subsets. Not required by the spec (the Help response satisfies the requirement)
-but commonly expected by users familiar with Hyrax/THREDDS. Low priority.
+The spec recommends a `Last-Modified` response header. This requires knowing
+when the underlying dataset was last modified, which xpublish doesn't currently
+expose. Could be derived from file modification times for file-backed datasets
+or from the Icechunk repo object for cloud-backed Icechunk datasets.
+
+## DAP4 Group Support (requires xarray-datatree)
+
+DAP4 Groups provide hierarchical namespaces matching HDF5/NetCDF-4 group
+structure. xarray datasets are single-level, but the Datatree extension
+adds group hierarchy. If xpublish gains datatree support, the DMR generator
+could emit `<Group>` elements and the constraint parser could handle `/group/var`
+paths.
