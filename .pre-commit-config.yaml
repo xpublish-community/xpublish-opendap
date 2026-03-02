@@ -18,9 +18,13 @@ repos:
     hooks:
       - id: mypy
         exclude: docs/source/conf.py
-        args: [--ignore-missing-imports]
         additional_dependencies:
           - types-PyYAML
+          - numpy
+          - xarray
+          - fastapi
+          - pydantic
+          - xpublish
 
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1

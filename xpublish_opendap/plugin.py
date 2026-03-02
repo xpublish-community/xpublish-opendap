@@ -44,7 +44,7 @@ from xpublish_opendap.io import load_dataset_async
 logger: logging.Logger = logging.getLogger("xpublish_opendap")
 
 
-class OpenDapPlugin(Plugin):
+class OpenDapPlugin(Plugin):  # type: ignore[misc]  # xpublish untyped
     """OpenDAP plugin for xpublish."""
 
     name: str = "opendap"
@@ -57,12 +57,12 @@ class OpenDapPlugin(Plugin):
     num_concurrent_data_loads: int = 4
     async_load_timeout: float = 30.0
 
-    @hookimpl
+    @hookimpl  # type: ignore[untyped-decorator]  # pluggy hookimpl untyped
     def dataset_router(self, deps: Dependencies) -> APIRouter:  # noqa: PLR0915
         """Create an OpenDAP router for xpublish."""
         router = APIRouter(
             prefix=self.dataset_router_prefix,
-            tags=self.dataset_router_tags,
+            tags=self.dataset_router_tags,  # type: ignore[arg-type]
         )
 
         config = self

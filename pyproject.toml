@@ -78,3 +78,15 @@ markers = [
 
 [tool.ruff.format]
 docstring-code-format = true
+
+[tool.mypy]
+strict = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = [
+    "xpublish.*",
+    "pluggy.*",
+    "cachey.*",
+]
+ignore_missing_imports = true

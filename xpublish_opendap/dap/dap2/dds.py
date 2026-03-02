@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Hashable, Iterator
 
 import xarray as xr
 
@@ -77,7 +77,7 @@ def generate_dds(
     yield f"}} {_escape_name(dataset_name)};\n"
 
 
-def _escape_name(name: str) -> str:
+def _escape_name(name: Hashable) -> str:
     """Escape a variable/dimension name for DAP2 DDS output.
 
     DAP2 allows alphanumeric, underscore, and a few others.

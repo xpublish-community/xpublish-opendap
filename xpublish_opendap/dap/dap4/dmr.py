@@ -60,7 +60,7 @@ def generate_dmr(ds: xr.Dataset, dataset_name: str) -> str:
     # Dimension declarations
     for dim_name, dim_size in ds.sizes.items():
         dim_el = ET.SubElement(root, 'Dimension')
-        dim_el.set('name', dim_name)
+        dim_el.set('name', str(dim_name))
         dim_el.set('size', str(dim_size))
 
     # Coordinate variables
@@ -144,18 +144,24 @@ def _add_attribute(parent: ET.Element, name: str, dap4_type: str, value: str) ->
         val_el.text = value
 
 
-def _attribute_dap4_type(value: Any) -> str:  # noqa: PLR0911
+def _attribute_dap4_type(value: Any) -> str:  # noqa: PLR0911, PLR0912
     """Determine the DAP4 type name for an attribute value."""
     if isinstance(value, str):
         return 'String'
     if isinstance(value, bool):
         return 'UInt8'
     if isinstance(value, np.integer):
-        return resolve_dap_type(np.dtype(type(value)), protocol='dap4').dap4_name
+        dap_type = resolve_dap_type(np.dtype(type(value)), protocol='dap4')
+        if dap_type.dap4_name is None:
+            return 'String'
+        return dap_type.dap4_name
     if isinstance(value, int):
         return 'Int64'
     if isinstance(value, np.floating):
-        return resolve_dap_type(np.dtype(type(value)), protocol='dap4').dap4_name
+        dap_type = resolve_dap_type(np.dtype(type(value)), protocol='dap4')
+        if dap_type.dap4_name is None:
+            return 'String'
+        return dap_type.dap4_name
     if isinstance(value, float):
         return 'Float64'
     if isinstance(value, np.ndarray):

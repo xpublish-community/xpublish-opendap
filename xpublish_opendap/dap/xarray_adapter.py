@@ -41,7 +41,9 @@ def plan_subsetting(ds: xr.Dataset, constraint: Constraint) -> SubsettingPlan:
     """
     plan = SubsettingPlan()
 
-    all_var_names = set(ds.data_vars) | set(ds.coords)
+    all_var_names: set[str] = (
+        {str(n) for n in ds.data_vars} | {str(n) for n in ds.coords}
+    )
 
     if not constraint.projections:
         # No projection = all variables
@@ -60,7 +62,8 @@ def plan_subsetting(ds: xr.Dataset, constraint: Constraint) -> SubsettingPlan:
                         f"Variable {resolved!r} has {len(var.dims)} dimensions "
                         f"but {len(proj.slices)} hyperslab(s) given",
                     )
-                for dim, slab in zip(var.dims, proj.slices, strict=True):
+                for dim_h, slab in zip(var.dims, proj.slices, strict=True):
+                    dim = str(dim_h)
                     dim_size = ds.sizes[dim]
                     _validate_hyperslab(slab, dim, dim_size)
                     new_slice = _hyperslab_to_slice(slab)
@@ -71,12 +74,13 @@ def plan_subsetting(ds: xr.Dataset, constraint: Constraint) -> SubsettingPlan:
                     plan.isel_args[dim] = new_slice
 
         # Ensure coordinate variables for selected data variables are included
-        coords_to_add = set()
+        coords_to_add: set[str] = set()
         for var_name in plan.variables:
             if var_name in ds.data_vars:
-                for dim in ds[var_name].dims:
-                    if dim in ds.coords and dim not in plan.variables:
-                        coords_to_add.add(dim)
+                for dim_h in ds[var_name].dims:
+                    dim_s = str(dim_h)
+                    if dim_s in ds.coords and dim_s not in plan.variables:
+                        coords_to_add.add(dim_s)
         plan.variables.extend(sorted(coords_to_add))
 
     # Estimate memory
@@ -113,7 +117,7 @@ def apply_plan(ds: xr.Dataset, plan: SubsettingPlan) -> xr.Dataset:
             if var_name in result:
                 for dim in result[var_name].dims:
                     if dim in result.coords:
-                        keep_vars.add(dim)
+                        keep_vars.add(str(dim))
 
         all_vars = set(result.data_vars) | set(result.coords)
         drop_vars = all_vars - keep_vars
@@ -205,7 +209,7 @@ def _estimate_memory(ds: xr.Dataset, plan: SubsettingPlan) -> int:
     if plan.variables is not None:
         var_names = plan.variables
     else:
-        var_names = list(ds.data_vars) + list(ds.coords)
+        var_names = [str(n) for n in ds.data_vars] + [str(n) for n in ds.coords]
 
     for var_name in var_names:
         if var_name not in ds:
@@ -214,8 +218,9 @@ def _estimate_memory(ds: xr.Dataset, plan: SubsettingPlan) -> int:
 
         # Compute subsetted shape
         shape = []
-        for dim in var.dims:
-            dim_size = ds.sizes[dim]
+        for dim_h in var.dims:
+            dim_size = ds.sizes[dim_h]
+            dim = str(dim_h)
             if dim in plan.isel_args:
                 s = plan.isel_args[dim]
                 start = s.start or 0

@@ -2,12 +2,18 @@
 """Tests for dap/dap4/dmr.py — DMR XML generation."""
 
 import xml.etree.ElementTree as ET
+from unittest.mock import patch
 
 import numpy as np
 import pytest
 import xarray as xr
 
-from xpublish_opendap.dap.dap4.dmr import DAP4_NS, generate_dmr
+from xpublish_opendap.dap.dap4.dmr import (
+    DAP4_NS,
+    _attribute_dap4_type,
+    generate_dmr,
+)
+from xpublish_opendap.dap.types import DapType
 
 
 @pytest.fixture
@@ -376,3 +382,54 @@ class TestMultiTypeAttributes:
         assert attr is not None
         assert attr.get('type') == 'Float64'
         assert attr.find(f'{{{DAP4_NS}}}Value').text == 'nan'
+
+
+class TestDap4NameNoneGuards:
+    """Tests for defensive guards when DapType.dap4_name is None."""
+
+    _BAD_TYPE = DapType(
+        dap2_name='Float64',
+        xdr_format='>f8',
+        xdr_wire_size=8,
+        numpy_dtype=np.dtype('float64'),
+        dap4_name=None,
+    )
+
+    def test_coord_with_no_dap4_name_raises(self):
+        ds = xr.Dataset(coords={'x': np.array([1.0, 2.0])})
+        with patch(
+            'xpublish_opendap.dap.dap4.dmr.resolve_dap_type',
+            return_value=self._BAD_TYPE,
+        ):
+            with pytest.raises(ValueError, match="has no DAP4 name"):
+                generate_dmr(ds, 'test')
+
+    def test_data_var_with_no_dap4_name_raises(self):
+        ds = xr.Dataset({'v': xr.DataArray(np.float64(42.0))})
+        with patch(
+            'xpublish_opendap.dap.dap4.dmr.resolve_dap_type',
+            return_value=self._BAD_TYPE,
+        ):
+            with pytest.raises(ValueError, match="has no DAP4 name"):
+                generate_dmr(ds, 'test')
+
+    def test_np_integer_attr_no_dap4_name_returns_string(self):
+        with patch(
+            'xpublish_opendap.dap.dap4.dmr.resolve_dap_type',
+            return_value=self._BAD_TYPE,
+        ):
+            assert _attribute_dap4_type(np.int32(42)) == 'String'
+
+    def test_np_floating_attr_no_dap4_name_returns_string(self):
+        with patch(
+            'xpublish_opendap.dap.dap4.dmr.resolve_dap_type',
+            return_value=self._BAD_TYPE,
+        ):
+            assert _attribute_dap4_type(np.float32(3.14)) == 'String'
+
+    def test_ndarray_attr_no_dap4_name_returns_string(self):
+        with patch(
+            'xpublish_opendap.dap.dap4.dmr.resolve_dap_type',
+            return_value=self._BAD_TYPE,
+        ):
+            assert _attribute_dap4_type(np.array([1.0, 2.0])) == 'String'
