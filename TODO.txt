@@ -1,0 +1,55 @@
+# xpublish-opendap: Deferred Work
+
+## DAP2 Sequence Support
+
+Sequences are a DAP2 constructor type representing variable-length ordered
+collections of records (like database tables). They are used by some
+oceanographic datasets (e.g. Argo profiles, IOOS buoy data).
+
+Full Sequence support requires:
+- Sequence wire encoding: 0x5A start-of-instance marker, 0xA5 end-of-sequence
+  marker, both XDR-encoded (padded to 4 bytes)
+- Nested Sequences (inner sequence per outer instance, at most one per level)
+- DDS/DAS representation of Sequence types
+- Selection constraint filtering on Sequences (the only type that supports
+  selection in DAP2): relational operators (<, <=, >, >=, =, !=, =~) on
+  atomic-typed fields, combined with logical AND across sub-expressions
+- Multi-valued selection constants: {val1, val2, ...} syntax (OR within a
+  single sub-expression)
+- Mapping from xarray to Sequence semantics (no direct equivalent — likely
+  requires explicit user annotation or a convention for tabular data)
+
+The architecture must support adding Sequences without restructuring the encoder
+or constraint parser. Specifically:
+- The constraint parser should already handle "&" selection clauses (parse but
+  raise "not supported" until implemented)
+- The encoder's type dispatch should have a Sequence branch (raise
+  NotImplementedError until implemented)
+- The DDS/DAS generators should handle Sequence declarations
+
+## DAP2 Server-Side Functions
+
+Server-side functions appear in projection or selection clauses of constraint
+expressions. The spec allows arbitrary functions but does not mandate any.
+
+Support requires:
+- Function call syntax in constraint parser: id(arg1, arg2, ...)
+- Registry / plugin mechanism for user-defined functions
+- In projection: function return value treated as top-level variable
+- In selection: function returning atomic type for relational sub-expressions,
+  or integer (0=false, nonzero=true) as entire sub-expression
+- Error handling: function errors must produce DAP Error response (no partial
+  responses)
+
+## DAP4 Async Response Extension
+
+DAP4 defines an optional async response protocol (HTTP 202 Accepted + polling)
+for near-line data and long-processing operations. Not needed for xpublish's
+synchronous request model but may be useful for very large dataset access
+patterns in the future.
+
+## HTML Dataset Browser
+
+A human-browsable HTML interface for exploring dataset structure and requesting
+subsets. Not required by the spec (the Help response satisfies the requirement)
+but commonly expected by users familiar with Hyrax/THREDDS. Low priority.

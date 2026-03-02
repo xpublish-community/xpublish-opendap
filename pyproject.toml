@@ -30,8 +30,8 @@ dynamic = ["version", "dependencies"]
 [project.entry-points."xpublish.plugin"]
 opendap = "xpublish_opendap.plugin:OpenDapPlugin"
 
-[tool.setuptools]
-packages = ["xpublish_opendap"]
+[tool.setuptools.packages.find]
+include = ["xpublish_opendap*"]
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
