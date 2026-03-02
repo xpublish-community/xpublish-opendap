@@ -17,14 +17,13 @@ import xarray as xr
 from xpublish_opendap.dap.dap2.dds import generate_dds
 from xpublish_opendap.dap.types import (
     DAP_BYTE,
-    DAP_STRING,
     DapType,
     cf_encode_variable,
     resolve_dap_type,
 )
 
 # Separator between DDS text and binary data per DAP2 spec v1.2
-DATA_SEPARATOR = b'\nData:\n'
+DATA_SEPARATOR = b"\nData:\n"
 
 
 async def generate_dods(
@@ -46,8 +45,8 @@ async def generate_dods(
         Chunks of the DODS response as bytes.
     """
     # Yield DDS text
-    dds_text = ''.join(generate_dds(ds, dataset_name))
-    yield dds_text.encode('utf-8')
+    dds_text = "".join(generate_dds(ds, dataset_name))
+    yield dds_text.encode("utf-8")
 
     # Yield separator
     yield DATA_SEPARATOR
@@ -123,13 +122,13 @@ def _xdr_encode_array(data: np.ndarray, dap_type: DapType) -> Iterator[bytes]:
         yield raw
         padding = _pad_size(len(raw))
         if padding > 0:
-            yield b'\x00' * padding
+            yield b"\x00" * padding
     elif dap_type.xdr_wire_size == 4 and data.dtype.itemsize < 4:
         # Int16/UInt16: each element widened to 4 bytes on wire
-        if dap_type.dap2_name in ('Int16', 'Int32'):
-            wire_data = data.astype('>i4')
+        if dap_type.dap2_name in ("Int16", "Int32"):
+            wire_data = data.astype(">i4")
         else:
-            wire_data = data.astype('>u4')
+            wire_data = data.astype(">u4")
         yield wire_data.tobytes()
     else:
         # Standard encoding: convert to big-endian wire format
@@ -154,18 +153,18 @@ def _xdr_encode_string_array(data: np.ndarray) -> Iterator[bytes]:
     yield _xdr_length_prefix(n)
 
     for item in data.flat:
-        s = str(item).encode('utf-8')
+        s = str(item).encode("utf-8")
         length = len(s)
-        yield struct.pack('>I', length)
+        yield struct.pack(">I", length)
         yield s
         padding = _pad_size(length)
         if padding > 0:
-            yield b'\x00' * padding
+            yield b"\x00" * padding
 
 
 def _xdr_length_prefix(n: int) -> bytes:
     """Encode array length as big-endian int32 (4 bytes)."""
-    return struct.pack('>I', n)
+    return struct.pack(">I", n)
 
 
 def _pad_size(length: int) -> int:

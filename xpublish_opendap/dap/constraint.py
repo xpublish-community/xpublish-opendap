@@ -69,7 +69,7 @@ class _Parser:
 
     def peek(self) -> str:
         if self.at_end():
-            return ''
+            return ""
         return self.raw[self.pos]
 
     def advance(self) -> str:
@@ -80,7 +80,7 @@ class _Parser:
     def expect(self, ch: str) -> None:
         if self.at_end() or self.raw[self.pos] != ch:
             raise ConstraintSyntaxError(
-                f'Expected {ch!r} at position {self.pos}, got {self.peek()!r}'
+                f"Expected {ch!r} at position {self.pos}, got {self.peek()!r}",
             )
         self.pos += 1
 
@@ -120,14 +120,14 @@ class _Parser:
             if ch == '"':
                 in_quotes = not in_quotes
                 current.append(ch)
-            elif ch == '&' and not in_quotes:
-                parts.append(''.join(current))
+            elif ch == "&" and not in_quotes:
+                parts.append("".join(current))
                 current = []
             else:
                 current.append(ch)
             i += 1
 
-        parts.append(''.join(current))
+        parts.append("".join(current))
         return parts
 
     def _parse_projections(self, text: str) -> list[ProjectionItem]:
@@ -149,43 +149,43 @@ class _Parser:
         paren_depth = 0
 
         for ch in text:
-            if ch == '(':
+            if ch == "(":
                 paren_depth += 1
                 current.append(ch)
-            elif ch == ')':
+            elif ch == ")":
                 paren_depth -= 1
                 current.append(ch)
-            elif ch == '[':
+            elif ch == "[":
                 bracket_depth += 1
                 current.append(ch)
-            elif ch == ']':
+            elif ch == "]":
                 bracket_depth -= 1
                 current.append(ch)
-            elif ch == ',' and bracket_depth == 0 and paren_depth == 0:
-                parts.append(''.join(current))
+            elif ch == "," and bracket_depth == 0 and paren_depth == 0:
+                parts.append("".join(current))
                 current = []
             else:
                 current.append(ch)
 
-        parts.append(''.join(current))
+        parts.append("".join(current))
         return parts
 
     def _parse_projection_item(self, text: str) -> ProjectionItem:
         """Parse a single projection item like 'air[0:10][0:5]'."""
         # Check for function call syntax: name(args)
-        if '(' in text and ')' in text:
+        if "(" in text and ")" in text:
             raise ConstraintNotSupportedError(
-                f'Server-side functions are not supported: {text!r}'
+                f"Server-side functions are not supported: {text!r}",
             )
 
         # Extract name and slices
-        bracket_start = text.find('[')
+        bracket_start = text.find("[")
         if bracket_start == -1:
             return ProjectionItem(name=text.strip())
 
         name = text[:bracket_start].strip()
         if not name:
-            raise ConstraintSyntaxError(f'Empty variable name in projection: {text!r}')
+            raise ConstraintSyntaxError(f"Empty variable name in projection: {text!r}")
 
         slices_text = text[bracket_start:]
         slices = self._parse_hyperslabs(slices_text)
@@ -198,8 +198,8 @@ class _Parser:
         i = 0
 
         while i < len(text):
-            if text[i] == '[':
-                end = text.index(']', i)
+            if text[i] == "[":
+                end = text.index("]", i)
                 slab_text = text[i + 1 : end]
                 slabs.append(self._parse_single_hyperslab(slab_text))
                 i = end + 1
@@ -214,7 +214,7 @@ class _Parser:
         DAP2 hyperslab format: [start:stride:stop] or [start:stop] or [start]
         All indices inclusive.
         """
-        parts = text.split(':')
+        parts = text.split(":")
 
         try:
             if len(parts) == 1:
@@ -232,17 +232,21 @@ class _Parser:
                 stride = int(parts[1])
                 stop = int(parts[2])
                 if stride <= 0:
-                    raise ConstraintSyntaxError(f'Stride must be positive, got {stride}')
+                    raise ConstraintSyntaxError(
+                        f"Stride must be positive, got {stride}",
+                    )
                 return HyperSlab(start=start, stop=stop, stride=stride)
             else:
-                raise ConstraintSyntaxError(f'Invalid hyperslab: [{text}]')
+                raise ConstraintSyntaxError(f"Invalid hyperslab: [{text}]")
         except ValueError as e:
-            raise ConstraintSyntaxError(f'Invalid hyperslab index in [{text}]: {e}') from e
+            raise ConstraintSyntaxError(
+                f"Invalid hyperslab index in [{text}]: {e}",
+            ) from e
 
     def _parse_selection(self, text: str) -> SelectionClause:
         """Parse a single selection clause like 'field>value'."""
         raise ConstraintNotSupportedError(
-            f'Selection constraints are not yet supported: {text!r}'
+            f"Selection constraints are not yet supported: {text!r}",
         )
 
 
@@ -262,3 +266,84 @@ def parse_dap2_constraint(raw: str) -> Constraint:
     decoded = unquote(raw)
     parser = _Parser(decoded)
     return parser.parse()
+
+
+def parse_dap4_constraint(raw: str) -> Constraint:
+    """Parse a DAP4 constraint expression string.
+
+    DAP4 CE differences from DAP2:
+    - Semicolons separate projections (not commas/ampersands)
+    - Variable names may have a leading '/' which is stripped
+    - The expression is typically extracted from a ``dap4.ce`` query parameter
+
+    This normalizes DAP4 syntax to reuse the existing _Parser internals.
+
+    Args:
+        raw: The raw DAP4 constraint expression.
+
+    Returns:
+        A parsed Constraint object.
+
+    Raises:
+        ConstraintSyntaxError: If the expression is malformed.
+        ConstraintNotSupportedError: If the expression uses unsupported features.
+    """
+    decoded = unquote(raw)
+
+    if not decoded.strip():
+        return Constraint()
+
+    # DAP4 uses semicolons to separate projections; normalize to commas
+    # Also strip leading '/' from variable names
+    normalized = _normalize_dap4_ce(decoded)
+
+    parser = _Parser(normalized)
+    return parser.parse()
+
+
+def _normalize_dap4_ce(text: str) -> str:
+    """Normalize DAP4 constraint expression to DAP2-compatible syntax.
+
+    - Replace semicolons (projection separator) with commas
+    - Strip leading '/' from variable names
+    - Filters (DAP4 selections) use '|' separator — not yet supported
+    """
+    # Split on '|' to separate projections from filters
+    parts = text.split("|", 1)
+    projection_part = parts[0]
+
+    if len(parts) > 1 and parts[1].strip():
+        raise ConstraintNotSupportedError(
+            f"DAP4 filter expressions are not yet supported: {parts[1]!r}",
+        )
+
+    # Replace semicolons with commas for projection items
+    normalized = projection_part.replace(";", ",")
+
+    # Strip leading '/' from variable names (but not from inside brackets)
+    result: list[str] = []
+    i = 0
+    in_bracket = False
+    strip_next_slash = True
+
+    while i < len(normalized):
+        ch = normalized[i]
+        if ch == "[":
+            in_bracket = True
+            result.append(ch)
+            strip_next_slash = False
+        elif ch == "]":
+            in_bracket = False
+            result.append(ch)
+        elif ch == ",":
+            result.append(ch)
+            strip_next_slash = True
+        elif ch == "/" and not in_bracket and strip_next_slash:
+            # Skip leading slash on variable names
+            pass
+        else:
+            result.append(ch)
+            strip_next_slash = False
+        i += 1
+
+    return "".join(result)

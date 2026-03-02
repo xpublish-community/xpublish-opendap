@@ -45,8 +45,8 @@ class RequestTooLargeError(DapError):
         super().__init__(
             code=1004,
             message=(
-                f'Estimated response size {estimated_bytes} bytes '
-                f'exceeds maximum allowed {max_bytes} bytes'
+                f"Estimated response size {estimated_bytes} bytes "
+                f"exceeds maximum allowed {max_bytes} bytes"
             ),
         )
         self.estimated_bytes = estimated_bytes

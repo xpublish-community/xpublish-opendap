@@ -11,7 +11,7 @@ import xarray as xr
 
 EXECUTOR = ThreadPoolExecutor(
     max_workers=8,
-    thread_name_prefix='xpublish-opendap-pool',
+    thread_name_prefix="xpublish-opendap-pool",
 )
 
 _compute_semaphores: dict[int, asyncio.Semaphore] = {}

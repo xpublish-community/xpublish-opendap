@@ -58,8 +58,8 @@ def plan_subsetting(ds: xr.Dataset, constraint: Constraint) -> SubsettingPlan:
                 var = ds[proj.name]
                 if len(proj.slices) != len(var.dims):
                     raise IndexOutOfRangeError(
-                        f'Variable {proj.name!r} has {len(var.dims)} dimensions '
-                        f'but {len(proj.slices)} hyperslab(s) given'
+                        f"Variable {proj.name!r} has {len(var.dims)} dimensions "
+                        f"but {len(proj.slices)} hyperslab(s) given",
                     )
                 for dim, slab in zip(var.dims, proj.slices):
                     dim_size = ds.sizes[dim]
@@ -130,24 +130,23 @@ def _validate_hyperslab(slab: HyperSlab, dim: str, dim_size: int) -> None:
     """Validate that hyperslab indices are within bounds."""
     if slab.start < 0:
         raise IndexOutOfRangeError(
-            f'Negative start index {slab.start} for dimension {dim!r}'
+            f"Negative start index {slab.start} for dimension {dim!r}",
         )
     if slab.stop < 0:
         raise IndexOutOfRangeError(
-            f'Negative stop index {slab.stop} for dimension {dim!r}'
+            f"Negative stop index {slab.stop} for dimension {dim!r}",
         )
     if slab.start >= dim_size:
         raise IndexOutOfRangeError(
-            f'Start index {slab.start} exceeds dimension {dim!r} size {dim_size}'
+            f"Start index {slab.start} exceeds dimension {dim!r} size {dim_size}",
         )
     if slab.stop >= dim_size:
         raise IndexOutOfRangeError(
-            f'Stop index {slab.stop} exceeds dimension {dim!r} size {dim_size}'
+            f"Stop index {slab.stop} exceeds dimension {dim!r} size {dim_size}",
         )
     if slab.start > slab.stop:
         raise IndexOutOfRangeError(
-            f'Start index {slab.start} > stop index {slab.stop} '
-            f'for dimension {dim!r}'
+            f"Start index {slab.start} > stop index {slab.stop} for dimension {dim!r}",
         )
 
 

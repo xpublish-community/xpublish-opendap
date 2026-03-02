@@ -16,15 +16,15 @@ def generate_error(code: int, message: str) -> Iterator[str]:
         Lines of the error response.
     """
     escaped = message.replace('"', '\\"')
-    yield 'Error {\n'
-    yield f'    code = {code};\n'
+    yield "Error {\n"
+    yield f"    code = {code};\n"
     yield f'    message = "{escaped}";\n'
-    yield '};\n'
+    yield "};\n"
 
 
 def generate_version(
-    dap_version: str = '2.0',
-    server_version: str = 'xpublish-opendap/2.0',
+    dap_version: str = "2.0",
+    server_version: str = "xpublish-opendap/2.0",
 ) -> Iterator[str]:
     """Yield DAP2 Version response text.
 
@@ -35,8 +35,8 @@ def generate_version(
     Yields:
         Lines of the version response.
     """
-    yield f'DAP/{dap_version}\n'
-    yield f'Server: {server_version}\n'
+    yield f"DAP/{dap_version}\n"
+    yield f"Server: {server_version}\n"
 
 
 def generate_help() -> str:
@@ -46,16 +46,23 @@ def generate_help() -> str:
         HTML string describing available endpoints.
     """
     return (
-        '<html><head><title>OPeNDAP Help</title></head><body>\n'
-        '<h1>OPeNDAP Server Help</h1>\n'
-        '<p>Supported DAP2 extensions:</p>\n'
-        '<ul>\n'
-        '<li><code>.dds</code> - Dataset Descriptor Structure</li>\n'
-        '<li><code>.das</code> - Dataset Attribute Structure</li>\n'
-        '<li><code>.dods</code> - Data (DataDDS)</li>\n'
-        '<li><code>.ver</code> - Server version</li>\n'
-        '<li><code>.help</code> - This help page</li>\n'
-        '</ul>\n'
-        '<p>Constraint expressions can be appended as query strings.</p>\n'
-        '</body></html>\n'
+        "<html><head><title>OPeNDAP Help</title></head><body>\n"
+        "<h1>OPeNDAP Server Help</h1>\n"
+        "<p>Supported DAP2 extensions:</p>\n"
+        "<ul>\n"
+        "<li><code>.dds</code> - Dataset Descriptor Structure</li>\n"
+        "<li><code>.das</code> - Dataset Attribute Structure</li>\n"
+        "<li><code>.dods</code> - Data (DataDDS)</li>\n"
+        "<li><code>.ver</code> - Server version</li>\n"
+        "<li><code>.help</code> - This help page</li>\n"
+        "</ul>\n"
+        "<p>Supported DAP4 extensions:</p>\n"
+        "<ul>\n"
+        "<li><code>.dmr</code> - Dataset Metadata Response</li>\n"
+        "<li><code>.dap</code> - DAP4 Data Response (chunked binary)</li>\n"
+        "<li><code>.dsr</code> - Dataset Services Response</li>\n"
+        "</ul>\n"
+        "<p>DAP2 constraint expressions can be appended as query strings.</p>\n"
+        "<p>DAP4 constraints use the <code>dap4.ce</code> query parameter.</p>\n"
+        "</body></html>\n"
     )
