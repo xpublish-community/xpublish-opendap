@@ -70,5 +70,10 @@ convention = "google"
 # Allow fastapi.Depends and other dependency injection style function arguments
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]
 
+[tool.pytest.ini_options]
+markers = [
+    "integration: end-to-end tests against a live xpublish server",
+]
+
 [tool.ruff.format]
 docstring-code-format = true
