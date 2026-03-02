@@ -53,9 +53,12 @@ class TestNcks:
         result = subprocess.run(
             [
                 "ncks",
-                "-d", "time,0,0",
-                "-d", "lat,0,0",
-                "-d", "lon,0,0",
+                "-d",
+                "time,0,0",
+                "-d",
+                "lat,0,0",
+                "-d",
+                "lon,0,0",
                 opendap_base,
                 str(out_file),
             ],

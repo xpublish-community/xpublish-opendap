@@ -42,6 +42,7 @@ class TestPlanSubsetting:
     def test_single_variable_projection(self, sample_ds):
         constraint = Constraint(projections=[ProjectionItem(name="temp")])
         plan = plan_subsetting(sample_ds, constraint)
+        assert plan.variables is not None
         assert "temp" in plan.variables
         # Coordinate variables should be auto-included
         assert "time" in plan.variables
@@ -135,6 +136,7 @@ class TestPlanSubsetting:
         """Grid-qualified path temp.temp resolves to temp."""
         constraint = Constraint(projections=[ProjectionItem(name="temp.temp")])
         plan = plan_subsetting(sample_ds, constraint)
+        assert plan.variables is not None
         assert "temp" in plan.variables
 
     def test_grid_array_member_with_slices(self, sample_ds):
@@ -151,6 +153,7 @@ class TestPlanSubsetting:
             ],
         )
         plan = plan_subsetting(sample_ds, constraint)
+        assert plan.variables is not None
         assert "temp" in plan.variables
         assert plan.isel_args["time"] == slice(0, 5, 1)
         assert plan.isel_args["x"] == slice(0, 3, 1)
@@ -159,6 +162,7 @@ class TestPlanSubsetting:
         """Grid map member path temp.time resolves to coordinate time."""
         constraint = Constraint(projections=[ProjectionItem(name="temp.time")])
         plan = plan_subsetting(sample_ds, constraint)
+        assert plan.variables is not None
         assert "time" in plan.variables
 
     def test_invalid_grid_member_raises(self, sample_ds):
@@ -245,6 +249,7 @@ class TestEdgeCaseSubsetting:
             ],
         )
         plan = plan_subsetting(sample_ds, constraint)
+        assert plan.variables is not None
         assert "temp" in plan.variables
         assert "time" in plan.variables
         # Slices should still be applied
@@ -256,6 +261,7 @@ class TestEdgeCaseSubsetting:
         """Projecting only 'temp' auto-adds 'time' and 'x' coords."""
         constraint = Constraint(projections=[ProjectionItem(name="temp")])
         plan = plan_subsetting(sample_ds, constraint)
+        assert plan.variables is not None
         assert "temp" in plan.variables
         assert "time" in plan.variables
         assert "x" in plan.variables
@@ -417,7 +423,7 @@ class TestEstimateMemoryEdgeCases:
     def test_plan_with_nonexistent_variable(self, sample_ds):
         from xpublish_opendap.dap.xarray_adapter import SubsettingPlan, _estimate_memory
 
-        plan = SubsettingPlan(variables=['nonexistent', 'temp', 'time', 'x'])
+        plan = SubsettingPlan(variables=["nonexistent", "temp", "time", "x"])
         mem = _estimate_memory(sample_ds, plan)
         assert mem > 0
 
@@ -425,10 +431,14 @@ class TestEstimateMemoryEdgeCases:
         from xpublish_opendap.dap.xarray_adapter import SubsettingPlan, _estimate_memory
 
         ds = xr.Dataset(
-            {'cvar': xr.DataArray(np.array([1 + 2j, 3 + 4j], dtype='complex128'), dims=['x'])},
-            coords={'x': np.arange(2)},
+            {
+                "cvar": xr.DataArray(
+                    np.array([1 + 2j, 3 + 4j], dtype="complex128"), dims=["x"]
+                )
+            },
+            coords={"x": np.arange(2)},
         )
-        plan = SubsettingPlan(variables=['cvar'])
+        plan = SubsettingPlan(variables=["cvar"])
         mem = _estimate_memory(ds, plan)
         # Falls back to var.dtype.itemsize (16 for complex128)
         assert mem == 2 * 16

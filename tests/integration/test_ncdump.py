@@ -49,4 +49,7 @@ class TestNcdump:
             timeout=30,
         )
         assert result.returncode == 0, f"ncdump failed: {result.stderr}"
-        assert "title" in result.stdout.lower() or "global attributes" in result.stdout.lower()
+        assert (
+            "title" in result.stdout.lower()
+            or "global attributes" in result.stdout.lower()
+        )

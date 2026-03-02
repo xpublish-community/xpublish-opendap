@@ -21,25 +21,28 @@ from xpublish_opendap.dap.dap4.data import (
 )
 
 
-async def _collect_dap4(ds, name='test'):
+async def _collect_dap4(ds, name="test"):
     """Collect all bytes from generate_dap4_data."""
     chunks = []
     async for chunk in generate_dap4_data(ds, name):
         chunks.append(chunk)
-    return b''.join(chunks)
+    return b"".join(chunks)
 
 
 def _split_dmr_and_binary(data):
     """Split DAP4 response into DMR text and binary portion."""
     idx = data.index(DMR_DATA_SEPARATOR)
-    dmr = data[:idx].decode('utf-8')
+    dmr = data[:idx].decode("utf-8")
     binary = data[idx + len(DMR_DATA_SEPARATOR) :]
     return dmr, binary
 
 
 def _read_chunk_header(data, offset):
-    """Read a chunk header at the given offset. Returns (type_flags, size, next_offset)."""
-    raw = struct.unpack('>I', data[offset : offset + 4])[0]
+    """Read a chunk header at given offset.
+
+    Returns (type_flags, size, next_offset).
+    """
+    raw = struct.unpack(">I", data[offset : offset + 4])[0]
     chunk_type = raw & ~CHUNK_SIZE_MASK & ~CHUNK_LITTLE_ENDIAN
     size = raw & CHUNK_SIZE_MASK
     return chunk_type, size, offset + 4
@@ -48,20 +51,20 @@ def _read_chunk_header(data, offset):
 class TestDAP4ResponseStructure:
     @pytest.mark.asyncio
     async def test_contains_dmr_and_separator(self):
-        ds = xr.Dataset(coords={'x': np.array([1.0, 2.0], dtype='float32')})
+        ds = xr.Dataset(coords={"x": np.array([1.0, 2.0], dtype="float32")})
         data = await _collect_dap4(ds)
         assert DMR_DATA_SEPARATOR in data
         dmr, _ = _split_dmr_and_binary(data)
-        assert '<Dataset' in dmr
+        assert "<Dataset" in dmr
 
     @pytest.mark.asyncio
     async def test_ends_with_end_chunk(self):
-        ds = xr.Dataset(coords={'x': np.array([1.0, 2.0], dtype='float32')})
+        ds = xr.Dataset(coords={"x": np.array([1.0, 2.0], dtype="float32")})
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
         # Last 4 bytes should be the end chunk header
         last_4 = binary[-4:]
-        raw = struct.unpack('>I', last_4)[0]
+        raw = struct.unpack(">I", last_4)[0]
         chunk_type = raw & ~CHUNK_SIZE_MASK & ~CHUNK_LITTLE_ENDIAN
         size = raw & CHUNK_SIZE_MASK
         assert chunk_type == CHUNK_END
@@ -71,26 +74,26 @@ class TestDAP4ResponseStructure:
 class TestChunkHeaders:
     @pytest.mark.asyncio
     async def test_data_chunk_has_correct_flags(self):
-        ds = xr.Dataset(coords={'x': np.array([1.0, 2.0], dtype='float32')})
+        ds = xr.Dataset(coords={"x": np.array([1.0, 2.0], dtype="float32")})
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
 
         # First chunk should be CHUNK_DATA with endian flag
-        raw = struct.unpack('>I', binary[0:4])[0]
+        raw = struct.unpack(">I", binary[0:4])[0]
         chunk_type = raw & ~CHUNK_SIZE_MASK & ~CHUNK_LITTLE_ENDIAN
         assert chunk_type == CHUNK_DATA
 
         # Check endianness flag matches system
-        if sys.byteorder == 'little':
+        if sys.byteorder == "little":
             assert raw & CHUNK_LITTLE_ENDIAN == CHUNK_LITTLE_ENDIAN
 
     @pytest.mark.asyncio
     async def test_chunk_size_field(self):
-        ds = xr.Dataset(coords={'x': np.array([1.0, 2.0], dtype='float32')})
+        ds = xr.Dataset(coords={"x": np.array([1.0, 2.0], dtype="float32")})
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
 
-        raw = struct.unpack('>I', binary[0:4])[0]
+        raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
 
         # x coord: uint64 length prefix (8) + 2 * 4 bytes float32 = 16
@@ -100,17 +103,17 @@ class TestChunkHeaders:
 class TestFloat32Encoding:
     @pytest.mark.asyncio
     async def test_float32_values(self):
-        ds = xr.Dataset(coords={'x': np.array([1.0, 2.0, 3.0], dtype='float32')})
+        ds = xr.Dataset(coords={"x": np.array([1.0, 2.0, 3.0], dtype="float32")})
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
 
         # Parse first chunk
-        raw = struct.unpack('>I', binary[0:4])[0]
+        raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[4 : 4 + size]
 
         # uint64 length prefix
-        n = struct.unpack('<Q', chunk_data[0:8])[0]
+        n = struct.unpack("<Q", chunk_data[0:8])[0]
         assert n == 3
 
         # 3 float32 in native byte order
@@ -121,15 +124,15 @@ class TestFloat32Encoding:
 class TestFloat64Encoding:
     @pytest.mark.asyncio
     async def test_float64_values(self):
-        ds = xr.Dataset(coords={'x': np.array([10.0, 20.0], dtype='float64')})
+        ds = xr.Dataset(coords={"x": np.array([10.0, 20.0], dtype="float64")})
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
 
-        raw = struct.unpack('>I', binary[0:4])[0]
+        raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[4 : 4 + size]
 
-        n = struct.unpack('<Q', chunk_data[0:8])[0]
+        n = struct.unpack("<Q", chunk_data[0:8])[0]
         assert n == 2
 
         values = np.frombuffer(chunk_data[8:24], dtype=np.float64)
@@ -140,18 +143,18 @@ class TestInt16Encoding:
     @pytest.mark.asyncio
     async def test_int16_natural_size(self):
         """DAP4 Int16 should use natural 2-byte size (not widened to 4 like XDR)."""
-        ds = xr.Dataset(coords={'x': np.array([100, 200], dtype='int16')})
+        ds = xr.Dataset(coords={"x": np.array([100, 200], dtype="int16")})
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
 
-        raw = struct.unpack('>I', binary[0:4])[0]
+        raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
 
         # uint64 (8) + 2 * 2 bytes = 12 (not 8+8=16 as in XDR)
         assert size == 12
 
         chunk_data = binary[4 : 4 + size]
-        n = struct.unpack('<Q', chunk_data[0:8])[0]
+        n = struct.unpack("<Q", chunk_data[0:8])[0]
         assert n == 2
 
         values = np.frombuffer(chunk_data[8:12], dtype=np.int16)
@@ -162,11 +165,11 @@ class TestByteEncoding:
     @pytest.mark.asyncio
     async def test_byte_no_padding(self):
         """DAP4 byte arrays should NOT be padded (unlike XDR)."""
-        ds = xr.Dataset(coords={'x': np.array([1, 2, 3], dtype='uint8')})
+        ds = xr.Dataset(coords={"x": np.array([1, 2, 3], dtype="uint8")})
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
 
-        raw = struct.unpack('>I', binary[0:4])[0]
+        raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
 
         # uint64 (8) + 3 bytes = 11 (no padding to 4-byte boundary)
@@ -176,15 +179,15 @@ class TestByteEncoding:
 class TestInt64Encoding:
     @pytest.mark.asyncio
     async def test_int64_values(self):
-        ds = xr.Dataset(coords={'x': np.array([1000000000000, -1], dtype='int64')})
+        ds = xr.Dataset(coords={"x": np.array([1000000000000, -1], dtype="int64")})
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
 
-        raw = struct.unpack('>I', binary[0:4])[0]
+        raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[4 : 4 + size]
 
-        n = struct.unpack('<Q', chunk_data[0:8])[0]
+        n = struct.unpack("<Q", chunk_data[0:8])[0]
         assert n == 2
 
         values = np.frombuffer(chunk_data[8:24], dtype=np.int64)
@@ -195,8 +198,8 @@ class TestStringEncoding:
     @pytest.mark.asyncio
     async def test_string_encoding(self):
         ds = xr.Dataset(
-            {'s': xr.DataArray(np.array(['hello', 'world'], dtype=object), dims=['x'])},
-            coords={'x': np.array([0, 1], dtype='int32')},
+            {"s": xr.DataArray(np.array(["hello", "world"], dtype=object), dims=["x"])},
+            coords={"x": np.array([0, 1], dtype="int32")},
         )
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
@@ -204,47 +207,47 @@ class TestStringEncoding:
         # Skip coordinate chunk (x: int32, 2 elements) + CRC
         # x chunk: header(4) + uint64(8) + 2*4 bytes(8) = 20 + CRC(4) = 24
         offset = 0
-        raw = struct.unpack('>I', binary[offset : offset + 4])[0]
+        raw = struct.unpack(">I", binary[offset : offset + 4])[0]
         x_size = raw & CHUNK_SIZE_MASK
         offset += 4 + x_size + 4  # header + data + CRC
 
         # String var chunk
-        raw = struct.unpack('>I', binary[offset : offset + 4])[0]
+        raw = struct.unpack(">I", binary[offset : offset + 4])[0]
         s_size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[offset + 4 : offset + 4 + s_size]
 
         # Array length
-        n = struct.unpack('<Q', chunk_data[0:8])[0]
+        n = struct.unpack("<Q", chunk_data[0:8])[0]
         assert n == 2
 
         # First string: "hello"
         pos = 8
-        str_len = struct.unpack('<Q', chunk_data[pos : pos + 8])[0]
+        str_len = struct.unpack("<Q", chunk_data[pos : pos + 8])[0]
         assert str_len == 5
-        assert chunk_data[pos + 8 : pos + 8 + 5] == b'hello'
+        assert chunk_data[pos + 8 : pos + 8 + 5] == b"hello"
 
         # Second string: "world"
         pos += 8 + 5
-        str_len = struct.unpack('<Q', chunk_data[pos : pos + 8])[0]
+        str_len = struct.unpack("<Q", chunk_data[pos : pos + 8])[0]
         assert str_len == 5
-        assert chunk_data[pos + 8 : pos + 8 + 5] == b'world'
+        assert chunk_data[pos + 8 : pos + 8 + 5] == b"world"
 
 
 class TestCRC32:
     @pytest.mark.asyncio
     async def test_crc32_after_data_chunk(self):
-        ds = xr.Dataset(coords={'x': np.array([1.0, 2.0], dtype='float32')})
+        ds = xr.Dataset(coords={"x": np.array([1.0, 2.0], dtype="float32")})
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
 
         # Read first data chunk
-        raw = struct.unpack('>I', binary[0:4])[0]
+        raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[4 : 4 + size]
 
         # CRC32 follows immediately after the chunk data
         crc_bytes = binary[4 + size : 4 + size + 4]
-        crc_received = struct.unpack('<I', crc_bytes)[0]
+        crc_received = struct.unpack("<I", crc_bytes)[0]
 
         # Compute expected CRC32
         crc_expected = zlib.crc32(chunk_data) & 0xFFFFFFFF
@@ -254,25 +257,27 @@ class TestCRC32:
     async def test_crc32_per_variable(self):
         """Each variable should have its own CRC32."""
         ds = xr.Dataset(
-            {'var': xr.DataArray(np.array([1.0, 2.0], dtype='float64'), dims=['x'])},
-            coords={'x': np.array([0.0, 1.0], dtype='float64')},
+            {"var": xr.DataArray(np.array([1.0, 2.0], dtype="float64"), dims=["x"])},
+            coords={"x": np.array([0.0, 1.0], dtype="float64")},
         )
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
 
         # Read coord chunk + CRC
-        raw = struct.unpack('>I', binary[0:4])[0]
+        raw = struct.unpack(">I", binary[0:4])[0]
         size1 = raw & CHUNK_SIZE_MASK
         coord_data = binary[4 : 4 + size1]
-        crc1 = struct.unpack('<I', binary[4 + size1 : 4 + size1 + 4])[0]
+        crc1 = struct.unpack("<I", binary[4 + size1 : 4 + size1 + 4])[0]
         assert crc1 == zlib.crc32(coord_data) & 0xFFFFFFFF
 
         # Read var chunk + CRC
         offset = 4 + size1 + 4
-        raw = struct.unpack('>I', binary[offset : offset + 4])[0]
+        raw = struct.unpack(">I", binary[offset : offset + 4])[0]
         size2 = raw & CHUNK_SIZE_MASK
         var_data = binary[offset + 4 : offset + 4 + size2]
-        crc2 = struct.unpack('<I', binary[offset + 4 + size2 : offset + 4 + size2 + 4])[0]
+        crc2 = struct.unpack("<I", binary[offset + 4 + size2 : offset + 4 + size2 + 4])[
+            0
+        ]
         assert crc2 == zlib.crc32(var_data) & 0xFFFFFFFF
 
 
@@ -280,16 +285,16 @@ class TestLengthPrefix:
     @pytest.mark.asyncio
     async def test_uint64_length_prefix(self):
         """DAP4 uses uint64 length prefix sent once (not doubled like DAP2)."""
-        ds = xr.Dataset(coords={'x': np.array([1.0, 2.0, 3.0], dtype='float32')})
+        ds = xr.Dataset(coords={"x": np.array([1.0, 2.0, 3.0], dtype="float32")})
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
 
-        raw = struct.unpack('>I', binary[0:4])[0]
+        raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[4 : 4 + size]
 
         # Length prefix is 8-byte uint64
-        n = struct.unpack('<Q', chunk_data[0:8])[0]
+        n = struct.unpack("<Q", chunk_data[0:8])[0]
         assert n == 3
 
         # The next 8 bytes should be float32 data, NOT another length prefix
@@ -300,18 +305,18 @@ class TestLengthPrefix:
 class TestInt32Encoding:
     @pytest.mark.asyncio
     async def test_int32_values(self):
-        ds = xr.Dataset(coords={'x': np.array([100000, -100000], dtype='int32')})
+        ds = xr.Dataset(coords={"x": np.array([100000, -100000], dtype="int32")})
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
 
-        raw = struct.unpack('>I', binary[0:4])[0]
+        raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[4 : 4 + size]
 
         # uint64 length prefix (8) + 2 * 4 bytes = 16
         assert size == 16
 
-        n = struct.unpack('<Q', chunk_data[0:8])[0]
+        n = struct.unpack("<Q", chunk_data[0:8])[0]
         assert n == 2
 
         values = np.frombuffer(chunk_data[8:16], dtype=np.int32)
@@ -321,17 +326,17 @@ class TestInt32Encoding:
 class TestUInt32Encoding:
     @pytest.mark.asyncio
     async def test_uint32_values(self):
-        ds = xr.Dataset(coords={'x': np.array([3_000_000_000, 1], dtype='uint32')})
+        ds = xr.Dataset(coords={"x": np.array([3_000_000_000, 1], dtype="uint32")})
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
 
-        raw = struct.unpack('>I', binary[0:4])[0]
+        raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[4 : 4 + size]
 
         assert size == 16
 
-        n = struct.unpack('<Q', chunk_data[0:8])[0]
+        n = struct.unpack("<Q", chunk_data[0:8])[0]
         assert n == 2
 
         values = np.frombuffer(chunk_data[8:16], dtype=np.uint32)
@@ -342,18 +347,18 @@ class TestInt8Encoding:
     @pytest.mark.asyncio
     async def test_int8_natural_size(self):
         """DAP4 Int8 should use natural 1-byte size."""
-        ds = xr.Dataset(coords={'x': np.array([-1, 0, 1], dtype='int8')})
+        ds = xr.Dataset(coords={"x": np.array([-1, 0, 1], dtype="int8")})
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
 
-        raw = struct.unpack('>I', binary[0:4])[0]
+        raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
 
         # uint64 (8) + 3 * 1 byte = 11
         assert size == 11
 
         chunk_data = binary[4 : 4 + size]
-        n = struct.unpack('<Q', chunk_data[0:8])[0]
+        n = struct.unpack("<Q", chunk_data[0:8])[0]
         assert n == 3
 
         values = np.frombuffer(chunk_data[8:11], dtype=np.int8)
@@ -364,18 +369,18 @@ class TestUInt16Encoding:
     @pytest.mark.asyncio
     async def test_uint16_natural_size(self):
         """DAP4 UInt16 should use natural 2-byte size."""
-        ds = xr.Dataset(coords={'x': np.array([1000, 2000], dtype='uint16')})
+        ds = xr.Dataset(coords={"x": np.array([1000, 2000], dtype="uint16")})
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
 
-        raw = struct.unpack('>I', binary[0:4])[0]
+        raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
 
         # uint64 (8) + 2 * 2 bytes = 12
         assert size == 12
 
         chunk_data = binary[4 : 4 + size]
-        n = struct.unpack('<Q', chunk_data[0:8])[0]
+        n = struct.unpack("<Q", chunk_data[0:8])[0]
         assert n == 2
 
         values = np.frombuffer(chunk_data[8:12], dtype=np.uint16)
@@ -386,11 +391,11 @@ class TestBoolEncoding:
     @pytest.mark.asyncio
     async def test_bool_as_uint8(self):
         """DAP4 bool → UInt8, 1 byte per element, no padding."""
-        ds = xr.Dataset(coords={'x': np.array([True, False, True])})
+        ds = xr.Dataset(coords={"x": np.array([True, False, True])})
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
 
-        raw = struct.unpack('>I', binary[0:4])[0]
+        raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
 
         # uint64 (8) + 3 * 1 byte = 11 (no padding)
@@ -406,15 +411,15 @@ class TestUInt64MaxEncoding:
     async def test_uint64_max_roundtrip(self):
         """uint64 max value (18446744073709551615) should round-trip."""
         max_val = np.uint64(np.iinfo(np.uint64).max)
-        ds = xr.Dataset(coords={'x': np.array([max_val, np.uint64(0)], dtype='uint64')})
+        ds = xr.Dataset(coords={"x": np.array([max_val, np.uint64(0)], dtype="uint64")})
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
 
-        raw = struct.unpack('>I', binary[0:4])[0]
+        raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[4 : 4 + size]
 
-        n = struct.unpack('<Q', chunk_data[0:8])[0]
+        n = struct.unpack("<Q", chunk_data[0:8])[0]
         assert n == 2
 
         values = np.frombuffer(chunk_data[8:24], dtype=np.uint64)
@@ -425,37 +430,37 @@ class TestUInt64MaxEncoding:
 class TestScalarEncoding:
     @pytest.mark.asyncio
     async def test_scalar_encoded_as_single_element(self):
-        ds = xr.Dataset({'value': xr.DataArray(np.float64(42.0))})
+        ds = xr.Dataset({"value": xr.DataArray(np.float64(42.0))})
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
 
-        raw = struct.unpack('>I', binary[0:4])[0]
+        raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[4 : 4 + size]
 
-        n = struct.unpack('<Q', chunk_data[0:8])[0]
+        n = struct.unpack("<Q", chunk_data[0:8])[0]
         assert n == 1
 
-        value = struct.unpack('<d', chunk_data[8:16])[0]
+        value = struct.unpack("<d", chunk_data[8:16])[0]
         assert value == 42.0
 
 
 class TestTimedeltaDAP4:
     @pytest.mark.asyncio
     async def test_timedelta_encoded_as_int64(self):
-        td = np.array([np.timedelta64(i, 'h') for i in range(3)])
-        ds = xr.Dataset(coords={'td': td})
+        td = np.array([np.timedelta64(i, "h") for i in range(3)])
+        ds = xr.Dataset(coords={"td": td})
         data = await _collect_dap4(ds)
         dmr, binary = _split_dmr_and_binary(data)
 
         # DMR should show Int64 type (CF-encoded timedelta → int64)
         root = ET.fromstring(dmr)
-        ns = 'http://xml.opendap.org/ns/DAP/4.0#'
+        ns = "http://xml.opendap.org/ns/DAP/4.0#"
         # Find the variable element for td
         td_el = None
-        for type_name in ('Int64', 'Float64', 'Int32'):
-            for el in root.findall(f'{{{ns}}}{type_name}'):
-                if el.get('name') == 'td':
+        for type_name in ("Int64", "Float64", "Int32"):
+            for el in root.findall(f"{{{ns}}}{type_name}"):
+                if el.get("name") == "td":
                     td_el = el
                     break
         assert td_el is not None
@@ -465,17 +470,17 @@ class TestTimedeltaDAP4:
 class TestNaTDAP4:
     @pytest.mark.asyncio
     async def test_nat_value_in_binary(self):
-        times = pd.array([pd.Timestamp('2000-01-01'), pd.NaT], dtype='datetime64[ns]')
-        ds = xr.Dataset(coords={'time': xr.Variable('time', times)})
+        times = pd.array([pd.Timestamp("2000-01-01"), pd.NaT], dtype="datetime64[ns]")
+        ds = xr.Dataset(coords={"time": xr.Variable("time", times)})
         data = await _collect_dap4(ds)
         dmr, binary = _split_dmr_and_binary(data)
 
         # The binary should contain the int64 min sentinel for NaT
-        nat_sentinel = struct.pack('<q', -9223372036854775808)
+        nat_sentinel = struct.pack("<q", -9223372036854775808)
         # The binary portion contains the encoded data
         assert len(binary) > 0
         # Read the first chunk to look for NaT value
-        raw = struct.unpack('>I', binary[0:4])[0]
+        raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[4 : 4 + size]
         # The NaT sentinel should appear in the chunk data
@@ -486,39 +491,43 @@ class TestBytesDTypeDAP4:
     @pytest.mark.asyncio
     async def test_bytes_variable_in_dmr(self):
         ds = xr.Dataset(
-            {'bvar': xr.DataArray(np.array([b'hello', b'world'], dtype='S5'), dims=['x'])},
-            coords={'x': np.array([0, 1], dtype='int32')},
+            {
+                "bvar": xr.DataArray(
+                    np.array([b"hello", b"world"], dtype="S5"), dims=["x"]
+                )
+            },
+            coords={"x": np.array([0, 1], dtype="int32")},
         )
         data = await _collect_dap4(ds)
         dmr, binary = _split_dmr_and_binary(data)
         # Bytes (S) dtype should map to String in DMR
         root = ET.fromstring(dmr)
-        ns = 'http://xml.opendap.org/ns/DAP/4.0#'
-        string_els = root.findall(f'{{{ns}}}String')
-        names = {el.get('name') for el in string_els}
-        assert 'bvar' in names
+        ns = "http://xml.opendap.org/ns/DAP/4.0#"
+        string_els = root.findall(f"{{{ns}}}String")
+        names = {el.get("name") for el in string_els}
+        assert "bvar" in names
 
 
 class TestEmptyArrayDAP4:
     @pytest.mark.asyncio
     async def test_empty_array_dmr(self):
         ds = xr.Dataset(
-            {'empty': xr.DataArray(np.empty((0, 3), dtype='float64'), dims=['y', 'x'])},
-            coords={'x': np.arange(3, dtype='float64')},
+            {"empty": xr.DataArray(np.empty((0, 3), dtype="float64"), dims=["y", "x"])},
+            coords={"x": np.arange(3, dtype="float64")},
         )
         data = await _collect_dap4(ds)
         dmr, binary = _split_dmr_and_binary(data)
         root = ET.fromstring(dmr)
-        ns = 'http://xml.opendap.org/ns/DAP/4.0#'
-        dims = root.findall(f'{{{ns}}}Dimension')
-        dim_map = {d.get('name'): int(d.get('size')) for d in dims}
-        assert dim_map.get('y') == 0
+        ns = "http://xml.opendap.org/ns/DAP/4.0#"
+        dims = root.findall(f"{{{ns}}}Dimension")
+        dim_map = {d.get("name"): int(d.get("size", "0")) for d in dims}
+        assert dim_map.get("y") == 0
 
     @pytest.mark.asyncio
     async def test_empty_array_dap_binary(self):
         ds = xr.Dataset(
-            {'empty': xr.DataArray(np.empty((0, 3), dtype='float64'), dims=['y', 'x'])},
-            coords={'x': np.arange(3, dtype='float64')},
+            {"empty": xr.DataArray(np.empty((0, 3), dtype="float64"), dims=["y", "x"])},
+            coords={"x": np.arange(3, dtype="float64")},
         )
         data = await _collect_dap4(ds)
         assert DMR_DATA_SEPARATOR in data

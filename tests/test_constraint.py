@@ -57,6 +57,7 @@ class TestProjectionParsing:
     def test_multidimensional_slicing(self):
         c = parse_dap2_constraint("air[0:10][0:5][0:5]")
         item = c.projections[0]
+        assert item.slices is not None
         assert len(item.slices) == 3
         assert item.slices[0] == HyperSlab(start=0, stop=10, stride=1)
         assert item.slices[1] == HyperSlab(start=0, stop=5, stride=1)
@@ -101,7 +102,7 @@ class TestHyperSlab:
     def test_frozen(self):
         slab = HyperSlab(start=0, stop=10, stride=1)
         with pytest.raises(AttributeError):
-            slab.start = 5
+            slab.start = 5  # type: ignore[misc]
 
     def test_equality(self):
         assert HyperSlab(0, 10, 1) == HyperSlab(0, 10, 1)
@@ -141,6 +142,7 @@ class TestDAP4ConstraintParsing:
     def test_multidim_hyperslab(self):
         c = parse_dap4_constraint("/air[0:2:10][0:5]")
         item = c.projections[0]
+        assert item.slices is not None
         assert len(item.slices) == 2
         assert item.slices[0] == HyperSlab(start=0, stop=10, stride=2)
         assert item.slices[1] == HyperSlab(start=0, stop=5, stride=1)
@@ -185,6 +187,7 @@ class TestParserEdgeCases:
         c = parse_dap2_constraint("var[0:1] [0:1]")
         item = c.projections[0]
         assert item.name == "var"
+        assert item.slices is not None
         assert len(item.slices) == 2
         assert item.slices[0] == HyperSlab(start=0, stop=1, stride=1)
         assert item.slices[1] == HyperSlab(start=0, stop=1, stride=1)
