@@ -71,6 +71,7 @@ convention = "google"
 extend-immutable-calls = ["fastapi.Depends", "fastapi.Query"]
 
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
 markers = [
     "integration: end-to-end tests against a live xpublish server",
 ]

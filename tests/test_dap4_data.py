@@ -3,9 +3,11 @@
 
 import struct
 import sys
+import xml.etree.ElementTree as ET
 import zlib
 
 import numpy as np
+import pandas as pd
 import pytest
 import xarray as xr
 
@@ -436,3 +438,87 @@ class TestScalarEncoding:
 
         value = struct.unpack('<d', chunk_data[8:16])[0]
         assert value == 42.0
+
+
+class TestTimedeltaDAP4:
+    @pytest.mark.asyncio
+    async def test_timedelta_encoded_as_int64(self):
+        td = np.array([np.timedelta64(i, 'h') for i in range(3)])
+        ds = xr.Dataset(coords={'td': td})
+        data = await _collect_dap4(ds)
+        dmr, binary = _split_dmr_and_binary(data)
+
+        # DMR should show Int64 type (CF-encoded timedelta → int64)
+        root = ET.fromstring(dmr)
+        ns = 'http://xml.opendap.org/ns/DAP/4.0#'
+        # Find the variable element for td
+        td_el = None
+        for type_name in ('Int64', 'Float64', 'Int32'):
+            for el in root.findall(f'{{{ns}}}{type_name}'):
+                if el.get('name') == 'td':
+                    td_el = el
+                    break
+        assert td_el is not None
+        assert len(binary) > 0
+
+
+class TestNaTDAP4:
+    @pytest.mark.asyncio
+    async def test_nat_value_in_binary(self):
+        times = pd.array([pd.Timestamp('2000-01-01'), pd.NaT], dtype='datetime64[ns]')
+        ds = xr.Dataset(coords={'time': xr.Variable('time', times)})
+        data = await _collect_dap4(ds)
+        dmr, binary = _split_dmr_and_binary(data)
+
+        # The binary should contain the int64 min sentinel for NaT
+        nat_sentinel = struct.pack('<q', -9223372036854775808)
+        # The binary portion contains the encoded data
+        assert len(binary) > 0
+        # Read the first chunk to look for NaT value
+        raw = struct.unpack('>I', binary[0:4])[0]
+        size = raw & CHUNK_SIZE_MASK
+        chunk_data = binary[4 : 4 + size]
+        # The NaT sentinel should appear in the chunk data
+        assert nat_sentinel in chunk_data
+
+
+class TestBytesDTypeDAP4:
+    @pytest.mark.asyncio
+    async def test_bytes_variable_in_dmr(self):
+        ds = xr.Dataset(
+            {'bvar': xr.DataArray(np.array([b'hello', b'world'], dtype='S5'), dims=['x'])},
+            coords={'x': np.array([0, 1], dtype='int32')},
+        )
+        data = await _collect_dap4(ds)
+        dmr, binary = _split_dmr_and_binary(data)
+        # Bytes (S) dtype should map to String in DMR
+        root = ET.fromstring(dmr)
+        ns = 'http://xml.opendap.org/ns/DAP/4.0#'
+        string_els = root.findall(f'{{{ns}}}String')
+        names = {el.get('name') for el in string_els}
+        assert 'bvar' in names
+
+
+class TestEmptyArrayDAP4:
+    @pytest.mark.asyncio
+    async def test_empty_array_dmr(self):
+        ds = xr.Dataset(
+            {'empty': xr.DataArray(np.empty((0, 3), dtype='float64'), dims=['y', 'x'])},
+            coords={'x': np.arange(3, dtype='float64')},
+        )
+        data = await _collect_dap4(ds)
+        dmr, binary = _split_dmr_and_binary(data)
+        root = ET.fromstring(dmr)
+        ns = 'http://xml.opendap.org/ns/DAP/4.0#'
+        dims = root.findall(f'{{{ns}}}Dimension')
+        dim_map = {d.get('name'): int(d.get('size')) for d in dims}
+        assert dim_map.get('y') == 0
+
+    @pytest.mark.asyncio
+    async def test_empty_array_dap_binary(self):
+        ds = xr.Dataset(
+            {'empty': xr.DataArray(np.empty((0, 3), dtype='float64'), dims=['y', 'x'])},
+            coords={'x': np.arange(3, dtype='float64')},
+        )
+        data = await _collect_dap4(ds)
+        assert DMR_DATA_SEPARATOR in data

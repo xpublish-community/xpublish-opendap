@@ -180,3 +180,25 @@ class TestCfEncodeVariable:
         var = xr.Variable("x", data)
         encoded = cf_encode_variable(var)
         assert encoded.dtype.byteorder in ("=", "|", "<")
+
+    def test_nat_cf_encodes_to_int64_min(self):
+        import pandas as pd
+
+        times = pd.array([pd.Timestamp("2000-01-01"), pd.NaT], dtype="datetime64[ns]")
+        var = xr.Variable("time", times)
+        encoded = cf_encode_variable(var)
+        # After CF encoding, NaT should map to the fill value
+        # The encoded dtype should be numeric (int or float)
+        assert encoded.dtype.kind in ("f", "i")
+        values = encoded.data
+        # At least one value should represent NaT as a sentinel
+        # For integer encoding: fill_value is typically a very large/small number
+        # For float encoding: NaT maps to NaN
+        if encoded.dtype.kind == "i":
+            # int64 encoding: NaT → fill_value (int64 min or similar)
+            assert np.any(values == np.iinfo(np.int64).min) or np.any(
+                values == encoded.attrs.get("_FillValue", np.iinfo(np.int64).min)
+            )
+        else:
+            # float encoding: NaT → NaN
+            assert np.any(np.isnan(values))

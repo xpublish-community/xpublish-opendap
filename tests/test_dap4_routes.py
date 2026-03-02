@@ -1,6 +1,7 @@
 # ruff: noqa: D100,D101,D102,D103,PLR2004
 """Tests for DAP4 plugin routes — .dmr, .dap, .dsr."""
 
+import re
 import struct
 import xml.etree.ElementTree as ET
 
@@ -279,6 +280,108 @@ class TestHelpIncludesDAP4:
         assert '.dmr' in resp.text
         assert '.dap' in resp.text
         assert '.dsr' in resp.text
+
+
+class TestCrossProtocolConsistency:
+    """Verify DAP2 and DAP4 metadata is consistent."""
+
+    def test_variable_names_match_dds_dmr(self, client):
+        dds_resp = client.get('/datasets/test/opendap.dds')
+        dmr_resp = client.get('/datasets/test/opendap.dmr')
+
+        # Parse DDS variable names (lines containing type declarations)
+        dds_text = dds_resp.text
+        dds_vars = set()
+        for line in dds_text.split('\n'):
+            stripped = line.strip()
+            for type_prefix in ('Float64', 'Float32', 'Int32', 'Int16', 'UInt16', 'String', 'Byte'):
+                if stripped.startswith(type_prefix + ' '):
+                    # Extract var name (before [ or ;)
+                    rest = stripped[len(type_prefix) + 1 :]
+                    name = rest.split('[')[0].split(';')[0].strip()
+                    dds_vars.add(name)
+
+        # Parse DMR variable names
+        root = ET.fromstring(dmr_resp.text)
+        dmr_vars = set()
+        for type_name in ('Float64', 'Float32', 'Int32', 'Int16', 'UInt16', 'UInt8', 'Int8', 'Int64', 'UInt64', 'String'):
+            for el in root.findall(f'{{{DAP4_NS}}}{type_name}'):
+                dmr_vars.add(el.get('name'))
+
+        # Both should have the same variable names
+        assert dds_vars == dmr_vars
+
+    def test_dimension_sizes_match(self, client):
+        dds_resp = client.get('/datasets/test/opendap.dds')
+        dmr_resp = client.get('/datasets/test/opendap.dmr')
+
+        # Parse DMR dimension sizes
+        root = ET.fromstring(dmr_resp.text)
+        dims = root.findall(f'{{{DAP4_NS}}}Dimension')
+        dmr_dim_sizes = {d.get('name'): int(d.get('size')) for d in dims}
+
+        # Parse DDS dimension sizes from coordinate declarations
+        # e.g. "Float64 time[time = 3];" → time: 3
+        dds_text = dds_resp.text
+        dds_dim_sizes = {}
+        import re
+        for match in re.finditer(r'\[(\w+) = (\d+)\]', dds_text):
+            dim_name = match.group(1)
+            dim_size = int(match.group(2))
+            dds_dim_sizes[dim_name] = dim_size
+
+        for dim_name, dmr_size in dmr_dim_sizes.items():
+            assert dim_name in dds_dim_sizes, f'Dimension {dim_name} missing from DDS'
+            assert dds_dim_sizes[dim_name] == dmr_size
+
+
+class TestDAP4MultiVar:
+    def test_dap4_multi_var_data(self, client):
+        resp = client.get('/datasets/test/opendap.dap?dap4.ce=/temp;/time')
+        assert resp.status_code == 200
+        data = resp.content
+        idx = data.index(DMR_DATA_SEPARATOR)
+        dmr = data[:idx].decode('utf-8')
+        assert 'temp' in dmr
+        assert 'time' in dmr
+
+
+class TestDAP4Stride:
+    def test_dap4_stride_response(self, client):
+        resp = client.get('/datasets/test/opendap.dap?dap4.ce=/temp[0:2:2][0:1:3][0:1:4]')
+        assert resp.status_code == 200
+        data = resp.content
+        idx = data.index(DMR_DATA_SEPARATOR)
+        dmr = data[:idx].decode('utf-8')
+        root = ET.fromstring(dmr)
+        # Dimensions should reflect stride subsetting
+        dims = root.findall(f'{{{DAP4_NS}}}Dimension')
+        dim_map = {d.get('name'): int(d.get('size')) for d in dims}
+        # time: [0:2:2] → indices 0, 2 → 2 elements
+        assert dim_map['time'] == 2
+
+
+class TestDSRServices:
+    def test_dsr_service_names(self, client):
+        resp = client.get('/datasets/test/opendap.dsr')
+        root = ET.fromstring(resp.text)
+        services = root.findall(f'{{{DAP4_NS}}}Service')
+        titles = {svc.get('title') for svc in services}
+        assert 'Dataset Metadata Response' in titles
+        assert 'DAP4 Data Response' in titles
+
+    def test_dsr_service_base_url(self, client):
+        resp = client.get('/datasets/test/opendap.dsr')
+        root = ET.fromstring(resp.text)
+        services = root.findall(f'{{{DAP4_NS}}}Service')
+        links = []
+        for svc in services:
+            link = svc.find(f'{{{DAP4_NS}}}Link')
+            if link is not None:
+                links.append(link.get('href'))
+        assert any('.dmr' in l for l in links)
+        assert any('.dap' in l for l in links)
+        assert any('opendap' in l for l in links)
 
 
 class TestDAP2StillWorks:

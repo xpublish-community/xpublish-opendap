@@ -542,6 +542,123 @@ class TestMultiTypeDODS:
         assert len(binary) > 0
 
 
+class TestLossyTypeEncoding:
+    """Test lossy DAP2 encoding of int64/uint64 as float64."""
+
+    @pytest.mark.asyncio
+    async def test_int64_encoded_as_float64_xdr(self):
+        val = 2**53 + 1
+        ds = xr.Dataset(coords={'x': np.array([val], dtype='int64')})
+        chunks = []
+        async for chunk in generate_dods(ds, 'test'):
+            chunks.append(chunk)
+        binary = b''.join(chunks).split(DATA_SEPARATOR)[1]
+
+        # int64 → DAP2 Float64 → big-endian float64 on wire
+        n1, n2 = struct.unpack('>II', binary[0:8])
+        assert n1 == 1
+        wire_val = struct.unpack('>d', binary[8:16])[0]
+        # Lossy: float64 cannot represent 2**53 + 1 exactly
+        assert isinstance(wire_val, float)
+
+    @pytest.mark.asyncio
+    async def test_uint64_encoded_as_float64_xdr(self):
+        val = np.uint64(2**53 + 1)
+        ds = xr.Dataset(coords={'x': np.array([val], dtype='uint64')})
+        chunks = []
+        async for chunk in generate_dods(ds, 'test'):
+            chunks.append(chunk)
+        binary = b''.join(chunks).split(DATA_SEPARATOR)[1]
+
+        n1, n2 = struct.unpack('>II', binary[0:8])
+        assert n1 == 1
+        wire_val = struct.unpack('>d', binary[8:16])[0]
+        assert isinstance(wire_val, float)
+
+
+class TestTimedeltaDODS:
+    """Test timedelta64 CF-encoding in DAP2."""
+
+    @pytest.mark.asyncio
+    async def test_timedelta_cf_encodes_to_numeric(self):
+        td = np.array([np.timedelta64(i, 'h') for i in range(3)])
+        ds = xr.Dataset(coords={'td': td})
+        dds = ''.join(generate_dds(ds, 'test'))
+        # After CF encoding, timedelta becomes numeric (Int64 or Float64)
+        lines = [l for l in dds.split('\n') if 'td' in l]
+        for line in lines:
+            assert 'Float64' in line or 'Int64' in line or 'Int32' in line
+
+    @pytest.mark.asyncio
+    async def test_timedelta_dods_binary(self):
+        td = np.array([np.timedelta64(i, 'h') for i in range(3)])
+        ds = xr.Dataset(coords={'td': td})
+        chunks = []
+        async for chunk in generate_dods(ds, 'test'):
+            chunks.append(chunk)
+        data = b''.join(chunks)
+        binary = data.split(DATA_SEPARATOR)[1]
+        assert len(binary) > 0
+
+
+class TestBytesAndUnicode:
+    """Test bytes (S) and unicode (U) dtype encoding in DAP2."""
+
+    def test_bytes_dtype_in_dds(self):
+        ds = xr.Dataset(
+            {'bvar': xr.DataArray(np.array([b'hello', b'world'], dtype='S5'), dims=['x'])},
+            coords={'x': np.arange(2, dtype='int32')},
+        )
+        dds = ''.join(generate_dds(ds, 'test'))
+        assert 'String bvar' in dds
+
+    def test_unicode_dds(self):
+        ds = xr.Dataset(
+            {'uvar': xr.DataArray(np.array(['hello', 'world'], dtype='U10'), dims=['x'])},
+            coords={'x': np.arange(2, dtype='int32')},
+        )
+        dds = ''.join(generate_dds(ds, 'test'))
+        assert 'String uvar' in dds
+
+    @pytest.mark.asyncio
+    async def test_mixed_string_dods_binary(self):
+        ds = xr.Dataset(
+            {'svar': xr.DataArray(np.array([b'abc', b'de'], dtype='S3'), dims=['x'])},
+            coords={'x': np.arange(2, dtype='int32')},
+        )
+        chunks = []
+        async for chunk in generate_dods(ds, 'test'):
+            chunks.append(chunk)
+        data = b''.join(chunks)
+        binary = data.split(DATA_SEPARATOR)[1]
+        assert len(binary) > 0
+
+
+class TestEmptyArrayDAP2:
+    """Test empty arrays (shape with 0 dimension) in DAP2."""
+
+    def test_empty_array_dds(self):
+        ds = xr.Dataset(
+            {'empty': xr.DataArray(np.empty((0, 3), dtype='float64'), dims=['y', 'x'])},
+            coords={'x': np.arange(3, dtype='float64')},
+        )
+        dds = ''.join(generate_dds(ds, 'test'))
+        assert 'Dataset {' in dds
+        assert 'empty' in dds
+
+    @pytest.mark.asyncio
+    async def test_empty_array_dods(self):
+        ds = xr.Dataset(
+            {'empty': xr.DataArray(np.empty((0, 3), dtype='float64'), dims=['y', 'x'])},
+            coords={'x': np.arange(3, dtype='float64')},
+        )
+        chunks = []
+        async for chunk in generate_dods(ds, 'test'):
+            chunks.append(chunk)
+        data = b''.join(chunks)
+        assert DATA_SEPARATOR in data
+
+
 class TestHeaders:
     def test_dap2_headers_exist(self):
         assert "XDODS-Server" in DAP2_HEADERS

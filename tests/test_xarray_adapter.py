@@ -280,6 +280,48 @@ class TestEdgeCaseSubsetting:
         assert float(result["v"].values[0]) == 42.0
 
 
+class TestConflictingSlices:
+    """Tests for conflicting/duplicate projections on the same variable."""
+
+    def test_conflicting_slices_last_wins(self, sample_ds):
+        """Two ProjectionItems for same var with different slices — last wins."""
+        constraint = Constraint(
+            projections=[
+                ProjectionItem(
+                    name="temp",
+                    slices=(
+                        HyperSlab(start=0, stop=4, stride=1),
+                        HyperSlab(start=0, stop=2, stride=1),
+                    ),
+                ),
+                ProjectionItem(
+                    name="temp",
+                    slices=(
+                        HyperSlab(start=0, stop=1, stride=1),
+                        HyperSlab(start=0, stop=1, stride=1),
+                    ),
+                ),
+            ],
+        )
+        plan = plan_subsetting(sample_ds, constraint)
+        # Last-wins behavior: second projection's slices should be used
+        assert plan.isel_args["time"] == slice(0, 2, 1)
+        assert plan.isel_args["x"] == slice(0, 2, 1)
+
+    def test_duplicate_variable_projection(self, sample_ds):
+        """Same var projected twice without slices — appears in variables list."""
+        constraint = Constraint(
+            projections=[
+                ProjectionItem(name="temp"),
+                ProjectionItem(name="temp"),
+            ],
+        )
+        plan = plan_subsetting(sample_ds, constraint)
+        result = apply_plan(sample_ds, plan)
+        # Regardless of duplicates in plan.variables, the result should have temp
+        assert "temp" in result
+
+
 class TestApplyPlan:
     def test_no_subsetting(self, sample_ds):
         from xpublish_opendap.dap.xarray_adapter import SubsettingPlan

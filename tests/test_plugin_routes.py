@@ -1,6 +1,8 @@
 # ruff: noqa: D100,D101,D102,D103,PLR2004
 """Tests for plugin.py — route handlers, headers, errors, constraints."""
 
+import xml.etree.ElementTree as ET
+
 import numpy as np
 import pytest
 import xarray as xr
@@ -8,6 +10,7 @@ import xpublish
 from fastapi.testclient import TestClient
 
 from xpublish_opendap import OpenDapPlugin
+from xpublish_opendap.dap.dap4.dmr import DAP4_NS
 
 
 @pytest.fixture(scope="module")
@@ -175,3 +178,82 @@ class TestMemoryThreshold:
         assert resp.status_code == 413
         assert "Error {" in resp.text
         assert "code = 1004" in resp.text
+
+
+class TestDASWithConstraints:
+    def test_das_with_dap2_constraint(self, client):
+        resp = client.get("/datasets/test/opendap.das?temp[0:1][0:1][0:1]")
+        assert resp.status_code == 200
+        assert "Attributes {" in resp.text
+
+    def test_das_single_var_projection(self, client):
+        resp = client.get("/datasets/test/opendap.das?temp")
+        assert resp.status_code == 200
+        text = resp.text
+        assert "Attributes {" in text
+        # temp attributes should be present
+        assert 'String units "kelvin"' in text
+
+    def test_das_constraint_invalid(self, client):
+        resp = client.get("/datasets/test/opendap.das?nonexistent[0:0][0:0][0:0]")
+        assert resp.status_code == 400
+        assert "Error {" in resp.text
+
+
+class TestMultiVarProjection:
+    def test_dds_multi_var(self, client):
+        resp = client.get("/datasets/test/opendap.dds?temp,time")
+        assert resp.status_code == 200
+        text = resp.text
+        assert "temp" in text
+        assert "time" in text
+
+    def test_dods_multi_var(self, client):
+        resp = client.get("/datasets/test/opendap.dods?temp,time")
+        assert resp.status_code == 200
+        assert b"\nData:\n" in resp.content
+        binary = resp.content.split(b"\nData:\n")[1]
+        assert len(binary) > 0
+
+    def test_dmr_multi_var(self, client):
+        resp = client.get("/datasets/test/opendap.dmr?dap4.ce=/temp;/time")
+        assert resp.status_code == 200
+        root = ET.fromstring(resp.text)
+        all_typed_els = []
+        for type_name in ('Float64', 'Float32', 'Int32', 'Int64', 'UInt8'):
+            all_typed_els.extend(root.findall(f'{{{DAP4_NS}}}{type_name}'))
+        var_names = {el.get('name') for el in all_typed_els}
+        assert 'temp' in var_names
+        assert 'time' in var_names
+
+
+class TestStrideAndCoordRoutes:
+    def test_dods_with_stride(self, client):
+        resp = client.get("/datasets/test/opendap.dods?temp[0:2:2][0:1:3][0:1:4]")
+        assert resp.status_code == 200
+        assert b"\nData:\n" in resp.content
+
+    def test_dods_coord_only(self, client):
+        resp = client.get("/datasets/test/opendap.dods?time")
+        assert resp.status_code == 200
+        dds_text = resp.content.split(b"\nData:\n")[0].decode("utf-8")
+        assert "time" in dds_text
+
+    def test_dap4_with_stride(self, client):
+        resp = client.get("/datasets/test/opendap.dap?dap4.ce=/temp[0:2:2][0:1:3][0:1:4]")
+        assert resp.status_code == 200
+
+
+class TestConflictingSlicesRoute:
+    def test_dods_conflicting_slices(self, client):
+        # Same var projected twice with different slices — should succeed (last-wins)
+        resp = client.get(
+            "/datasets/test/opendap.dods?temp[0:1][0:1][0:1],temp[0:0][0:0][0:0]"
+        )
+        assert resp.status_code == 200
+
+    def test_dap4_conflicting_slices(self, client):
+        resp = client.get(
+            "/datasets/test/opendap.dap?dap4.ce=/temp[0:1][0:1][0:1];/temp[0:0][0:0][0:0]"
+        )
+        assert resp.status_code == 200
