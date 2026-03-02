@@ -60,7 +60,7 @@ def plan_subsetting(ds: xr.Dataset, constraint: Constraint) -> SubsettingPlan:
                         f"Variable {resolved!r} has {len(var.dims)} dimensions "
                         f"but {len(proj.slices)} hyperslab(s) given",
                     )
-                for dim, slab in zip(var.dims, proj.slices):
+                for dim, slab in zip(var.dims, proj.slices, strict=True):
                     dim_size = ds.sizes[dim]
                     _validate_hyperslab(slab, dim, dim_size)
                     new_slice = _hyperslab_to_slice(slab)

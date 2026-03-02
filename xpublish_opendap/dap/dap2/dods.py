@@ -1,8 +1,8 @@
-"""DODS (DataDDS) binary response generation with XDR encoding.
+r"""DODS (DataDDS) binary response generation with XDR encoding.
 
 The DODS response consists of:
 1. DDS text as UTF-8 bytes
-2. The separator b'\\nData:\\n'
+2. The separator b'\nData:\n'
 3. XDR-encoded binary data for each variable
 """
 
@@ -30,11 +30,11 @@ async def generate_dods(
     ds: xr.Dataset,
     dataset_name: str,
 ) -> AsyncIterator[bytes]:
-    """Yield the complete DODS response as byte chunks.
+    r"""Yield the complete DODS response as byte chunks.
 
     Structure:
         [DDS text as UTF-8]
-        b'\\nData:\\n'
+        b'\nData:\n'
         [XDR-encoded binary data for each variable]
 
     Args:
@@ -121,7 +121,7 @@ def _xdr_encode_array(data: np.ndarray, dap_type: DapType) -> Iterator[bytes]:
         padding = _pad_size(len(raw))
         if padding > 0:
             yield b"\x00" * padding
-    elif dap_type.xdr_wire_size == 4 and data.dtype.itemsize < 4:
+    elif dap_type.xdr_wire_size == 4 and data.dtype.itemsize < 4:  # noqa: PLR2004
         # Int16/UInt16: each element widened to 4 bytes on wire
         if dap_type.dap2_name in ("Int16", "Int32"):
             wire_data = data.astype(">i4")

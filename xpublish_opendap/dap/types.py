@@ -152,7 +152,7 @@ _NUMPY_TO_DAP4: dict[np.dtype, DapType] = {
 }
 
 
-def resolve_dap_type(  # noqa: PLR0911, PLR0912
+def resolve_dap_type(
     dtype: np.dtype,
     *,
     protocol: Literal["dap2", "dap4"] = "dap2",
@@ -191,7 +191,7 @@ def resolve_dap_type(  # noqa: PLR0911, PLR0912
 
     # Try to match by kind and itemsize for less common dtypes
     if dtype.kind == "f":
-        return DAP_FLOAT64 if dtype.itemsize >= 8 else DAP_FLOAT32
+        return DAP_FLOAT64 if dtype.itemsize >= 8 else DAP_FLOAT32  # noqa: PLR2004
     raise ValueError(f"No DAP2 mapping for numpy dtype {dtype!r}")
 
 

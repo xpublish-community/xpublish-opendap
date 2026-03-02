@@ -114,7 +114,7 @@ class _Parser:
         # Split on commas not inside brackets
         parts = self._split_projection_items(text)
         for part in parts:
-            part = part.strip()
+            part = part.strip()  # noqa: PLW2901
             if part:
                 items.append(self._parse_projection_item(part))
         return items
@@ -195,16 +195,16 @@ class _Parser:
         parts = text.split(":")
 
         try:
-            if len(parts) == 1:
+            if len(parts) == 1:  # noqa: PLR2004
                 # [index] - single element
                 idx = int(parts[0])
                 return HyperSlab(start=idx, stop=idx, stride=1)
-            elif len(parts) == 2:
+            elif len(parts) == 2:  # noqa: PLR2004
                 # [start:stop]
                 start = int(parts[0])
                 stop = int(parts[1])
                 return HyperSlab(start=start, stop=stop, stride=1)
-            elif len(parts) == 3:
+            elif len(parts) == 3:  # noqa: PLR2004
                 # [start:stride:stop]
                 start = int(parts[0])
                 stride = int(parts[1])

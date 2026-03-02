@@ -70,7 +70,8 @@ def generate_dmr(ds: xr.Dataset, dataset_name: str) -> str:
         encoded = cf_encode_variable(coord.variable)
         dap_type = resolve_dap_type(encoded.dtype, protocol='dap4')
 
-        assert dap_type.dap4_name is not None
+        if dap_type.dap4_name is None:
+            raise ValueError(f"DapType for {encoded.dtype!r} has no DAP4 name")
         var_el = ET.SubElement(root, dap_type.dap4_name)
         var_el.set('name', str(coord_name))
 
@@ -88,7 +89,8 @@ def generate_dmr(ds: xr.Dataset, dataset_name: str) -> str:
         encoded = cf_encode_variable(var.variable)
         dap_type = resolve_dap_type(encoded.dtype, protocol='dap4')
 
-        assert dap_type.dap4_name is not None
+        if dap_type.dap4_name is None:
+            raise ValueError(f"DapType for {encoded.dtype!r} has no DAP4 name")
         var_el = ET.SubElement(root, dap_type.dap4_name)
         var_el.set('name', str(var_name))
 
@@ -104,7 +106,7 @@ def generate_dmr(ds: xr.Dataset, dataset_name: str) -> str:
                 map_el.set('name', f'/{dim}')
 
         # Variable attributes
-        _add_variable_attributes(var_el, var.attrs)
+        _add_variable_attributes(var_el, encoded.attrs)
 
     # Global attributes in NC_GLOBAL container
     if ds.attrs:
@@ -142,7 +144,7 @@ def _add_attribute(parent: ET.Element, name: str, dap4_type: str, value: str) ->
         val_el.text = value
 
 
-def _attribute_dap4_type(value: Any) -> str:
+def _attribute_dap4_type(value: Any) -> str:  # noqa: PLR0911
     """Determine the DAP4 type name for an attribute value."""
     if isinstance(value, str):
         return 'String'
@@ -159,7 +161,8 @@ def _attribute_dap4_type(value: Any) -> str:
     if isinstance(value, np.ndarray):
         try:
             dap_type = resolve_dap_type(value.dtype, protocol='dap4')
-            assert dap_type.dap4_name is not None
+            if dap_type.dap4_name is None:
+                raise ValueError(f"DapType for {value.dtype!r} has no DAP4 name")
             return dap_type.dap4_name
         except (ValueError, KeyError):
             return 'String'

@@ -38,7 +38,8 @@ def generate_das(ds: xr.Dataset) -> Iterator[str]:
     # Data variable attributes
     for var_name in ds.data_vars:
         var = ds[var_name]
-        attrs = var.attrs
+        encoded = cf_encode_variable(var.variable)
+        attrs = encoded.attrs
         if attrs:
             yield f"    {var_name} {{\n"
             yield from _format_attributes(attrs, indent=8)
@@ -70,7 +71,7 @@ def _format_attributes(attrs: dict[str, Any], indent: int = 8) -> Iterator[str]:
         yield f"{pad}{dap_type_name} {key} {formatted_value};\n"
 
 
-def _attribute_type_name(value: Any) -> str:
+def _attribute_type_name(value: Any) -> str:  # noqa: PLR0911
     """Determine the DAP2 type name for an attribute value."""
     if isinstance(value, str):
         return "String"
