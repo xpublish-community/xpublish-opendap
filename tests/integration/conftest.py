@@ -29,3 +29,16 @@ def opendap_base(base_url):
 def reference_ds():
     """Reference air_temperature dataset for value comparison."""
     return xr.tutorial.open_dataset("air_temperature")
+
+
+@pytest.fixture(scope="session")
+def reference_nc(tmp_path_factory):
+    """Write the air_temperature dataset to a local netCDF4 file once per session.
+
+    Returns the file path as a string (for subprocess compatibility).
+    """
+    ds = xr.tutorial.open_dataset("air_temperature")
+    path = tmp_path_factory.mktemp("reference") / "air_temperature.nc"
+    ds.to_netcdf(path)
+    ds.close()
+    return str(path)
