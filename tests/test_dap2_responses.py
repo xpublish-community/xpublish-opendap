@@ -659,6 +659,41 @@ class TestEmptyArrayDAP2:
         assert DATA_SEPARATOR in data
 
 
+class TestDASFallbackAttributes:
+    """Test fallback branches in _attribute_type_name and _format_string_value."""
+
+    def test_none_attr_type_is_string(self):
+        ds = xr.Dataset(attrs={'val': None})
+        das = ''.join(generate_das(ds))
+        assert 'String val "None"' in das
+
+    def test_complex_array_attr_fallback(self):
+        ds = xr.Dataset(attrs={'arr': np.array([1 + 2j], dtype='complex128')})
+        das = ''.join(generate_das(ds))
+        # complex dtype cannot resolve to DapType → falls back to String
+        assert 'String arr' in das
+
+    def test_object_attr_type_is_string(self):
+        ds = xr.Dataset(attrs={'obj': 42.0 + 0j})  # complex value, not ndarray
+        das = ''.join(generate_das(ds))
+        # complex is not str/bool/np.integer/int/np.floating/float/ndarray/list → String
+        assert 'String obj' in das
+
+
+class TestScalarCoordDDS:
+    def test_scalar_coordinate_in_dds(self):
+        ds = xr.Dataset(
+            {'v': xr.DataArray([1.0, 2.0], dims=['x'])},
+            coords={
+                'x': np.array([0.0, 1.0], dtype='float64'),
+                'ref': np.float64(0.0),
+            },
+        )
+        dds = ''.join(generate_dds(ds, 'test'))
+        # Scalar coord should appear without brackets
+        assert 'Float64 ref;' in dds
+
+
 class TestHeaders:
     def test_dap2_headers_exist(self):
         assert "XDODS-Server" in DAP2_HEADERS

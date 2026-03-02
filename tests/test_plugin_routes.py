@@ -2,6 +2,7 @@
 """Tests for plugin.py — route handlers, headers, errors, constraints."""
 
 import xml.etree.ElementTree as ET
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -257,3 +258,69 @@ class TestConflictingSlicesRoute:
             "/datasets/test/opendap.dap?dap4.ce=/temp[0:1][0:1][0:1];/temp[0:0][0:0][0:0]"
         )
         assert resp.status_code == 200
+
+
+class TestUnexpectedExceptionHandling:
+    """Test that unexpected exceptions in handlers return proper error responses."""
+
+    @pytest.fixture
+    def err_client(self):
+        ds = xr.Dataset(
+            {
+                'temp': xr.DataArray(
+                    np.arange(6, dtype='float64').reshape(2, 3),
+                    dims=['y', 'x'],
+                ),
+            },
+            coords={
+                'y': np.arange(2, dtype='float64'),
+                'x': np.arange(3, dtype='float64'),
+            },
+        )
+        rest = xpublish.Rest({'test': ds}, plugins={'opendap': OpenDapPlugin()})
+        return TestClient(rest.app)
+
+    def test_dds_unexpected_error(self, err_client):
+        with patch(
+            'xpublish_opendap.plugin.generate_dds',
+            side_effect=RuntimeError('boom'),
+        ):
+            resp = err_client.get('/datasets/test/opendap.dds')
+        assert resp.status_code == 500
+        assert 'Error {' in resp.text
+
+    def test_das_unexpected_error(self, err_client):
+        with patch(
+            'xpublish_opendap.plugin.generate_das',
+            side_effect=RuntimeError('boom'),
+        ):
+            resp = err_client.get('/datasets/test/opendap.das')
+        assert resp.status_code == 500
+        assert 'Error {' in resp.text
+
+    def test_dods_unexpected_error(self, err_client):
+        with patch(
+            'xpublish_opendap.plugin.load_dataset_async',
+            side_effect=RuntimeError('boom'),
+        ):
+            resp = err_client.get('/datasets/test/opendap.dods')
+        assert resp.status_code == 500
+        assert 'Error {' in resp.text
+
+    def test_dmr_unexpected_error(self, err_client):
+        with patch(
+            'xpublish_opendap.plugin.generate_dmr',
+            side_effect=RuntimeError('boom'),
+        ):
+            resp = err_client.get('/datasets/test/opendap.dmr')
+        assert resp.status_code == 500
+        assert 'Error' in resp.text
+
+    def test_dap4_data_unexpected_error(self, err_client):
+        with patch(
+            'xpublish_opendap.plugin.load_dataset_async',
+            side_effect=RuntimeError('boom'),
+        ):
+            resp = err_client.get('/datasets/test/opendap.dap')
+        assert resp.status_code == 500
+        assert 'Error' in resp.text

@@ -364,3 +364,71 @@ class TestApplyPlan:
         assert result.sizes["time"] == 6  # indices 2-7 inclusive
         assert result.sizes["x"] == 3  # indices 1-3 inclusive
         assert "temp" in result
+
+
+class TestValidationBranches:
+    def test_negative_stop_raises(self, sample_ds):
+        constraint = Constraint(
+            projections=[
+                ProjectionItem(
+                    name="temp",
+                    slices=(
+                        HyperSlab(start=0, stop=-1, stride=1),
+                        HyperSlab(start=0, stop=4, stride=1),
+                    ),
+                ),
+            ],
+        )
+        with pytest.raises(IndexOutOfRangeError, match="Negative"):
+            plan_subsetting(sample_ds, constraint)
+
+    def test_start_exceeds_dim_size_raises(self, sample_ds):
+        constraint = Constraint(
+            projections=[
+                ProjectionItem(
+                    name="temp",
+                    slices=(
+                        HyperSlab(start=100, stop=100, stride=1),
+                        HyperSlab(start=0, stop=4, stride=1),
+                    ),
+                ),
+            ],
+        )
+        with pytest.raises(IndexOutOfRangeError, match="exceeds"):
+            plan_subsetting(sample_ds, constraint)
+
+    def test_start_greater_than_stop_raises(self, sample_ds):
+        constraint = Constraint(
+            projections=[
+                ProjectionItem(
+                    name="temp",
+                    slices=(
+                        HyperSlab(start=5, stop=2, stride=1),
+                        HyperSlab(start=0, stop=4, stride=1),
+                    ),
+                ),
+            ],
+        )
+        with pytest.raises(IndexOutOfRangeError, match="Start index 5 > stop index 2"):
+            plan_subsetting(sample_ds, constraint)
+
+
+class TestEstimateMemoryEdgeCases:
+    def test_plan_with_nonexistent_variable(self, sample_ds):
+        from xpublish_opendap.dap.xarray_adapter import SubsettingPlan, _estimate_memory
+
+        plan = SubsettingPlan(variables=['nonexistent', 'temp', 'time', 'x'])
+        mem = _estimate_memory(sample_ds, plan)
+        assert mem > 0
+
+    def test_estimate_memory_unsupported_dtype(self):
+        from xpublish_opendap.dap.xarray_adapter import SubsettingPlan, _estimate_memory
+
+        ds = xr.Dataset(
+            {'cvar': xr.DataArray(np.array([1 + 2j, 3 + 4j], dtype='complex128'), dims=['x'])},
+            coords={'x': np.arange(2)},
+        )
+        plan = SubsettingPlan(variables=['cvar'])
+        mem = _estimate_memory(ds, plan)
+        # Falls back to var.dtype.itemsize (16 for complex128)
+        assert mem == 2 * 16

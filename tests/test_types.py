@@ -75,6 +75,9 @@ class TestResolveDapType:
     def test_bytes_dtype_maps_to_string(self):
         assert resolve_dap_type(np.dtype("S10")) is DAP_STRING
 
+    def test_float16_maps_to_float32_dap2(self):
+        assert resolve_dap_type(np.dtype("float16")) is DAP_FLOAT32
+
 
 class TestResolveDapTypeDAP4:
     def test_float64(self):
@@ -120,6 +123,9 @@ class TestResolveDapTypeDAP4:
         assert (
             resolve_dap_type(np.dtype("datetime64[ns]"), protocol="dap4") is DAP_FLOAT64
         )
+
+    def test_float16_maps_to_float32_dap4(self):
+        assert resolve_dap_type(np.dtype("float16"), protocol="dap4") is DAP_FLOAT32
 
     def test_unknown_dtype_raises(self):
         with pytest.raises(ValueError, match="No DAP4 mapping"):

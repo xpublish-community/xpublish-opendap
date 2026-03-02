@@ -234,3 +234,115 @@ class TestAttributes:
         attrs = root.findall(f'{{{DAP4_NS}}}Attribute')
         nc_global_found = any(a.get('name') == 'NC_GLOBAL' for a in attrs)
         assert not nc_global_found
+
+
+class TestMultiTypeAttributes:
+    """Tests for DMR attribute type/value formatting helpers."""
+
+    @pytest.fixture
+    def attr_ds(self):
+        """Dataset with diverse global attribute types."""
+        return xr.Dataset(
+            {'v': xr.DataArray([1.0], dims=['x'])},
+            coords={'x': [0]},
+            attrs={
+                'array_attr': np.array([1.0, 2.0, 3.0]),
+                'bool_attr': True,
+                'nan_attr': float('nan'),
+                'list_int_attr': [10, 20, 30],
+                'list_str_attr': ['alpha', 'beta'],
+            },
+        )
+
+    def _get_nc_global_attr(self, root, attr_name):
+        """Find an attribute inside NC_GLOBAL container by name."""
+        for container in root.findall(f'{{{DAP4_NS}}}Attribute'):
+            if container.get('name') == 'NC_GLOBAL':
+                for attr in container.findall(f'{{{DAP4_NS}}}Attribute'):
+                    if attr.get('name') == attr_name:
+                        return attr
+        return None
+
+    def test_array_attr_type_and_values(self, attr_ds):
+        root = _parse_dmr(attr_ds)
+        attr = self._get_nc_global_attr(root, 'array_attr')
+        assert attr is not None
+        assert attr.get('type') == 'Float64'
+        values = [v.text for v in attr.findall(f'{{{DAP4_NS}}}Value')]
+        assert values == ['1.0', '2.0', '3.0']
+
+    def test_bool_attr_type_and_value(self, attr_ds):
+        root = _parse_dmr(attr_ds)
+        attr = self._get_nc_global_attr(root, 'bool_attr')
+        assert attr is not None
+        assert attr.get('type') == 'UInt8'
+        assert attr.find(f'{{{DAP4_NS}}}Value').text == '1'
+
+    def test_list_int_attr_type(self, attr_ds):
+        root = _parse_dmr(attr_ds)
+        attr = self._get_nc_global_attr(root, 'list_int_attr')
+        assert attr is not None
+        assert attr.get('type') == 'Float64'
+        values = [v.text for v in attr.findall(f'{{{DAP4_NS}}}Value')]
+        assert values == ['10', '20', '30']
+
+    def test_list_str_attr_type(self, attr_ds):
+        root = _parse_dmr(attr_ds)
+        attr = self._get_nc_global_attr(root, 'list_str_attr')
+        assert attr is not None
+        assert attr.get('type') == 'String'
+
+    def test_numpy_int_attr(self):
+        ds = xr.Dataset(
+            {'v': xr.DataArray([1.0], dims=['x'])},
+            coords={'x': [0]},
+            attrs={'np_int': np.int32(42)},
+        )
+        root = _parse_dmr(ds)
+        for container in root.findall(f'{{{DAP4_NS}}}Attribute'):
+            if container.get('name') == 'NC_GLOBAL':
+                for attr in container.findall(f'{{{DAP4_NS}}}Attribute'):
+                    if attr.get('name') == 'np_int':
+                        assert attr.get('type') == 'Int32'
+                        assert attr.find(f'{{{DAP4_NS}}}Value').text == '42'
+                        return
+        pytest.fail('np_int attribute not found in DMR')
+
+    def test_numpy_float_attr(self):
+        ds = xr.Dataset(
+            {'v': xr.DataArray([1.0], dims=['x'])},
+            coords={'x': [0]},
+            attrs={'np_flt': np.float64(3.14)},
+        )
+        root = _parse_dmr(ds)
+        for container in root.findall(f'{{{DAP4_NS}}}Attribute'):
+            if container.get('name') == 'NC_GLOBAL':
+                for attr in container.findall(f'{{{DAP4_NS}}}Attribute'):
+                    if attr.get('name') == 'np_flt':
+                        assert attr.get('type') == 'Float64'
+                        assert attr.find(f'{{{DAP4_NS}}}Value').text == '3.14'
+                        return
+        pytest.fail('np_flt attribute not found in DMR')
+
+    def test_python_int_attr(self):
+        ds = xr.Dataset(
+            {'v': xr.DataArray([1.0], dims=['x'])},
+            coords={'x': [0]},
+            attrs={'py_int': 99},
+        )
+        root = _parse_dmr(ds)
+        for container in root.findall(f'{{{DAP4_NS}}}Attribute'):
+            if container.get('name') == 'NC_GLOBAL':
+                for attr in container.findall(f'{{{DAP4_NS}}}Attribute'):
+                    if attr.get('name') == 'py_int':
+                        assert attr.get('type') == 'Int64'
+                        assert attr.find(f'{{{DAP4_NS}}}Value').text == '99'
+                        return
+        pytest.fail('py_int attribute not found in DMR')
+
+    def test_nan_attr_value(self, attr_ds):
+        root = _parse_dmr(attr_ds)
+        attr = self._get_nc_global_attr(root, 'nan_attr')
+        assert attr is not None
+        assert attr.get('type') == 'Float64'
+        assert attr.find(f'{{{DAP4_NS}}}Value').text == 'nan'

@@ -166,3 +166,25 @@ class TestDAP4ConstraintParsing:
     def test_whitespace_only(self):
         c = parse_dap4_constraint("   ")
         assert c.projections == []
+
+
+class TestParserEdgeCases:
+    def test_empty_variable_name_raises(self):
+        with pytest.raises(ConstraintSyntaxError, match="Empty variable name"):
+            parse_dap2_constraint("[0:10]")
+
+    def test_four_part_hyperslab_raises(self):
+        with pytest.raises(ConstraintSyntaxError, match="Invalid hyperslab"):
+            parse_dap2_constraint("var[1:2:3:4]")
+
+    def test_quoted_string_in_constraint(self):
+        with pytest.raises(ConstraintNotSupportedError, match="not yet supported"):
+            parse_dap2_constraint('var&field>"hello"')
+
+    def test_space_between_hyperslabs(self):
+        c = parse_dap2_constraint("var[0:1] [0:1]")
+        item = c.projections[0]
+        assert item.name == "var"
+        assert len(item.slices) == 2
+        assert item.slices[0] == HyperSlab(start=0, stop=1, stride=1)
+        assert item.slices[1] == HyperSlab(start=0, stop=1, stride=1)
