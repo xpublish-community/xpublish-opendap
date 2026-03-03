@@ -39,7 +39,6 @@ from xpublish_opendap.dap.dap4.headers import DAP4_HEADERS
 from xpublish_opendap.dap.dap4.responses import generate_dap4_error, generate_dsr
 from xpublish_opendap.dap.xarray_adapter import apply_plan, plan_subsetting
 from xpublish_opendap.errors import DapError, RequestTooLargeError
-from xpublish_opendap.io import load_dataset_async
 
 logger: logging.Logger = logging.getLogger("xpublish_opendap")
 
@@ -56,6 +55,7 @@ class OpenDapPlugin(Plugin):  # type: ignore[misc]  # xpublish untyped
     max_request_memory_bytes: int = 512 * 1024 * 1024  # 512 MB
     num_concurrent_data_loads: int = 4
     async_load_timeout: float = 30.0
+    dask_num_workers: int = 4
 
     @hookimpl  # type: ignore[untyped-decorator]  # pluggy hookimpl untyped
     def dataset_router(self, deps: Dependencies) -> APIRouter:  # noqa: PLR0915
@@ -197,14 +197,12 @@ class OpenDapPlugin(Plugin):  # type: ignore[misc]  # xpublish untyped
 
                 subsetted = apply_plan(ds, plan)
 
-                # Async load the data
-                loaded = await load_dataset_async(
-                    subsetted,
-                    timeout=config.async_load_timeout,
-                )
-
                 return StreamingResponse(
-                    generate_dods(loaded, dataset_id),
+                    generate_dods(
+                        subsetted,
+                        dataset_id,
+                        dask_num_workers=config.dask_num_workers,
+                    ),
                     media_type=CONTENT_TYPES["dods"],
                     headers=_dap2_headers("dods"),
                 )
@@ -285,14 +283,12 @@ class OpenDapPlugin(Plugin):  # type: ignore[misc]  # xpublish untyped
 
                 subsetted = apply_plan(ds, plan)
 
-                # Async load the data
-                loaded = await load_dataset_async(
-                    subsetted,
-                    timeout=config.async_load_timeout,
-                )
-
                 return StreamingResponse(
-                    generate_dap4_data(loaded, dataset_id),
+                    generate_dap4_data(
+                        subsetted,
+                        dataset_id,
+                        dask_num_workers=config.dask_num_workers,
+                    ),
                     media_type=DAP4_CONTENT_TYPES["dap"],
                     headers=_dap4_response_headers(),
                 )

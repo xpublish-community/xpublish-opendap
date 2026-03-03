@@ -28,8 +28,20 @@ def generate_dds(
     """
     yield "Dataset {\n"
 
-    # Emit coordinate variables as top-level arrays
+    # Identify coordinates used as Grid Maps (dimension coords of non-scalar data vars).
+    # These are emitted inside Grid declarations, not as top-level arrays.
+    grid_map_coords: set[Hashable] = set()
+    for var_name in ds.data_vars:
+        var = ds[var_name]
+        if var.ndim > 0:
+            for dim in var.dims:
+                if dim in ds.coords:
+                    grid_map_coords.add(dim)
+
+    # Emit orphan coordinates (not referenced as Grid Maps) as top-level arrays
     for coord_name in ds.coords:
+        if coord_name in grid_map_coords:
+            continue
         coord = ds.coords[coord_name]
         encoded = cf_encode_variable(coord.variable)
         dap_type = resolve_dap_type(encoded.dtype)

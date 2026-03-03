@@ -9,6 +9,13 @@ from typing import Any
 
 import xarray as xr
 
+try:
+    import dask
+
+    HAS_DASK = True
+except ImportError:
+    HAS_DASK = False
+
 EXECUTOR = ThreadPoolExecutor(
     max_workers=8,
     thread_name_prefix="xpublish-opendap-pool",
@@ -66,19 +73,42 @@ async def run_in_executor(func: Callable[..., Any], *args: Any) -> Any:
         return await loop.run_in_executor(EXECUTOR, func, *args)
 
 
+def load_variable(
+    var: xr.DataArray | xr.Variable,
+    dask_num_workers: int = 4,
+) -> None:
+    """Load a single variable into memory with parallel dask scheduling.
+
+    This is a synchronous function intended to be called from a thread pool
+    executor. It loads the variable in-place.
+
+    Args:
+        var: The variable to load (modified in-place).
+        dask_num_workers: Number of dask threads for parallel chunk loading.
+    """
+    if HAS_DASK:
+        with dask.config.set(scheduler='threads', num_workers=dask_num_workers):
+            var.load()
+    else:
+        var.load()
+
+
 async def load_dataset_async(
     ds: xr.Dataset,
     *,
     timeout: float = 30.0,
+    dask_num_workers: int = 4,
 ) -> xr.Dataset:
     """Load a lazy Dataset into memory off the event loop.
 
     Runs ds.load() in a thread pool executor so the event loop is not blocked.
+    When dask is available, uses the threaded scheduler for parallel chunk loading.
     The dataset structure, encoding metadata, and coordinate info are preserved.
 
     Args:
         ds: The lazy xarray Dataset (already subsetted).
         timeout: Maximum time in seconds for loading to complete.
+        dask_num_workers: Number of dask threads for parallel chunk loading.
 
     Returns:
         The same Dataset with all data loaded into memory.
@@ -86,6 +116,12 @@ async def load_dataset_async(
     sem = get_data_load_semaphore()
     loop = asyncio.get_running_loop()
 
+    def _load() -> xr.Dataset:
+        if HAS_DASK:
+            with dask.config.set(scheduler='threads', num_workers=dask_num_workers):
+                return ds.load()
+        return ds.load()
+
     async with asyncio.timeout(timeout):
         async with sem:
-            return await loop.run_in_executor(EXECUTOR, ds.load)
+            return await loop.run_in_executor(EXECUTOR, _load)

@@ -21,16 +21,55 @@ from xpublish_opendap.dap.types import (
     cf_encode_variable,
     resolve_dap_type,
 )
+from xpublish_opendap.io import load_variable, run_in_executor
 
 # Separator between DDS text and binary data per DAP2 spec v1.2
 DATA_SEPARATOR = b"\nData:\n"
 
 
+def _load_and_encode_xdr(da: xr.DataArray, dask_num_workers: int) -> bytes:
+    """Load a DataArray and XDR-encode it.
+
+    This is a synchronous function intended to be called in a thread pool
+    executor so that both data loading and encoding happen off the event loop.
+
+    Args:
+        da: The (possibly lazy) DataArray to load and encode.
+        dask_num_workers: Number of dask threads for parallel chunk loading.
+
+    Returns:
+        XDR-encoded bytes for this variable.
+    """
+    load_variable(da, dask_num_workers)
+    encoded_var = cf_encode_variable(da.variable)
+    data = np.asarray(encoded_var.data)
+    dap_type = resolve_dap_type(encoded_var.dtype)
+    return b"".join(_xdr_encode_array(data, dap_type))
+
+
+def _get_grid_map_coords(ds: xr.Dataset) -> set:
+    """Identify coordinates used as Grid Maps of non-scalar data variables."""
+    grid_map_coords: set = set()
+    for var_name in ds.data_vars:
+        var = ds[var_name]
+        if var.ndim > 0:
+            for dim in var.dims:
+                if dim in ds.coords:
+                    grid_map_coords.add(dim)
+    return grid_map_coords
+
+
 async def generate_dods(
     ds: xr.Dataset,
     dataset_name: str,
+    *,
+    dask_num_workers: int = 4,
 ) -> AsyncIterator[bytes]:
     r"""Yield the complete DODS response as byte chunks.
+
+    Loads data per-variable in a thread pool executor so that both data
+    loading and XDR encoding happen off the event loop. Coordinates are
+    loaded first (typically small), then data variables stream one at a time.
 
     Structure:
         [DDS text as UTF-8]
@@ -38,49 +77,46 @@ async def generate_dods(
         [XDR-encoded binary data for each variable]
 
     Args:
-        ds: The (subsetted, loaded) xarray Dataset.
+        ds: The (subsetted, possibly lazy) xarray Dataset.
         dataset_name: The name for the Dataset declaration.
+        dask_num_workers: Number of dask threads for parallel chunk loading.
 
     Yields:
         Chunks of the DODS response as bytes.
     """
-    # Yield DDS text
+    # DDS from metadata — no data load needed
     dds_text = "".join(generate_dds(ds, dataset_name))
     yield dds_text.encode("utf-8")
-
-    # Yield separator
     yield DATA_SEPARATOR
 
-    # Yield XDR-encoded data for each coordinate, then each data variable
-    # Order: coordinates first (as declared in DDS), then data variables as Grids
+    grid_map_coords = _get_grid_map_coords(ds)
+
+    # Load + encode all coordinates in executor (typically small 1-D arrays).
+    # Cache the encoded bytes since Grid Maps are re-emitted per data variable.
+    coord_encoded: dict = {}
     for coord_name in ds.coords:
-        coord = ds.coords[coord_name]
-        encoded_var = cf_encode_variable(coord.variable)
-        data = np.asarray(encoded_var.data)
-        dap_type = resolve_dap_type(encoded_var.dtype)
+        coord_bytes: bytes = await run_in_executor(
+            _load_and_encode_xdr, ds.coords[coord_name], dask_num_workers
+        )
+        coord_encoded[coord_name] = coord_bytes
 
-        for chunk in _xdr_encode_array(data, dap_type):
-            yield chunk
+    # Yield orphan coordinates (not referenced as Grid Maps)
+    for coord_name in ds.coords:
+        if coord_name not in grid_map_coords:
+            yield coord_encoded[coord_name]
 
+    # Yield data variables as Grids — load + encode each in executor
     for var_name in ds.data_vars:
         var = ds[var_name]
-        encoded_var = cf_encode_variable(var.variable)
-        data = np.asarray(encoded_var.data)
-        dap_type = resolve_dap_type(encoded_var.dtype)
+        var_bytes: bytes = await run_in_executor(
+            _load_and_encode_xdr, var, dask_num_workers
+        )
+        yield var_bytes
 
-        # Grid encoding: main array first, then each map (coordinate) vector
-        for chunk in _xdr_encode_array(data, dap_type):
-            yield chunk
-
-        # Map vectors for this Grid
+        # Map vectors from cache (already loaded + encoded above)
         for dim in var.dims:
             if dim in ds.coords:
-                dim_coord = ds.coords[dim]
-                dim_encoded = cf_encode_variable(dim_coord.variable)
-                dim_data = np.asarray(dim_encoded.data)
-                dim_dap_type = resolve_dap_type(dim_encoded.dtype)
-                for chunk in _xdr_encode_array(dim_data, dim_dap_type):
-                    yield chunk
+                yield coord_encoded[dim]
 
 
 def _xdr_encode_array(data: np.ndarray, dap_type: DapType) -> Iterator[bytes]:

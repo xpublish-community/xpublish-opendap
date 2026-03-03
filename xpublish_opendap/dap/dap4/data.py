@@ -28,6 +28,7 @@ import xarray as xr
 
 from xpublish_opendap.dap.dap4.dmr import generate_dmr
 from xpublish_opendap.dap.types import DapType, cf_encode_variable, resolve_dap_type
+from xpublish_opendap.io import load_variable, run_in_executor
 
 # Chunk type flags
 CHUNK_DATA = 0x00000000
@@ -43,11 +44,42 @@ MAX_CHUNK_SIZE = CHUNK_SIZE_MASK
 DMR_DATA_SEPARATOR = b'\r\n'
 
 
+def _load_and_encode_dap4(
+    da: xr.DataArray,
+    dask_num_workers: int,
+    endian_flag: int,
+) -> bytes:
+    """Load a DataArray and encode as DAP4 chunked binary.
+
+    This is a synchronous function intended to be called in a thread pool
+    executor so that both data loading and encoding happen off the event loop.
+
+    Args:
+        da: The (possibly lazy) DataArray to load and encode.
+        dask_num_workers: Number of dask threads for parallel chunk loading.
+        endian_flag: Endianness flag for chunk headers.
+
+    Returns:
+        Chunked DAP4 binary bytes (headers + data + CRC32) for this variable.
+    """
+    load_variable(da, dask_num_workers)
+    encoded_var = cf_encode_variable(da.variable)
+    data = np.asarray(encoded_var.data)
+    dap_type = resolve_dap_type(encoded_var.dtype, protocol='dap4')
+    var_bytes = b''.join(_dap4_encode_variable(data, dap_type))
+    return b''.join(_emit_data_chunks(var_bytes, endian_flag))
+
+
 async def generate_dap4_data(
     ds: xr.Dataset,
     dataset_name: str,
+    *,
+    dask_num_workers: int = 4,
 ) -> AsyncIterator[bytes]:
     """Yield the complete DAP4 data response as byte chunks.
+
+    Loads data per-variable in a thread pool executor so that both data
+    loading and encoding happen off the event loop.
 
     Structure:
         [DMR XML as UTF-8]
@@ -56,13 +88,14 @@ async def generate_dap4_data(
         [End chunk]
 
     Args:
-        ds: The (subsetted, loaded) xarray Dataset.
+        ds: The (subsetted, possibly lazy) xarray Dataset.
         dataset_name: The name for the Dataset declaration.
+        dask_num_workers: Number of dask threads for parallel chunk loading.
 
     Yields:
         Chunks of the DAP4 data response as bytes.
     """
-    # Yield DMR text
+    # DMR from metadata — no data load needed
     dmr_text = generate_dmr(ds, dataset_name)
     yield dmr_text.encode('utf-8')
 
@@ -72,27 +105,19 @@ async def generate_dap4_data(
     # Determine endianness flag
     endian_flag = CHUNK_LITTLE_ENDIAN if sys.byteorder == 'little' else 0
 
-    # Encode and yield each coordinate variable
+    # Load + encode each coordinate variable in executor
     for coord_name in ds.coords:
-        coord = ds.coords[coord_name]
-        encoded_var = cf_encode_variable(coord.variable)
-        data = np.asarray(encoded_var.data)
-        dap_type = resolve_dap_type(encoded_var.dtype, protocol='dap4')
+        chunk_bytes: bytes = await run_in_executor(
+            _load_and_encode_dap4, ds.coords[coord_name], dask_num_workers, endian_flag
+        )
+        yield chunk_bytes
 
-        var_bytes = b''.join(_dap4_encode_variable(data, dap_type))
-        for chunk in _emit_data_chunks(var_bytes, endian_flag):
-            yield chunk
-
-    # Encode and yield each data variable
+    # Load + encode each data variable in executor
     for var_name in ds.data_vars:
-        var = ds[var_name]
-        encoded_var = cf_encode_variable(var.variable)
-        data = np.asarray(encoded_var.data)
-        dap_type = resolve_dap_type(encoded_var.dtype, protocol='dap4')
-
-        var_bytes = b''.join(_dap4_encode_variable(data, dap_type))
-        for chunk in _emit_data_chunks(var_bytes, endian_flag):
-            yield chunk
+        chunk_bytes = await run_in_executor(
+            _load_and_encode_dap4, ds[var_name], dask_num_workers, endian_flag
+        )
+        yield chunk_bytes
 
     # End chunk
     yield _chunk_header(CHUNK_END, 0)

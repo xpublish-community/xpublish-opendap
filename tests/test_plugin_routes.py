@@ -302,7 +302,7 @@ class TestUnexpectedExceptionHandling:
 
     def test_dods_unexpected_error(self, err_client):
         with patch(
-            "xpublish_opendap.plugin.load_dataset_async",
+            "xpublish_opendap.plugin.generate_dods",
             side_effect=RuntimeError("boom"),
         ):
             resp = err_client.get("/datasets/test/opendap.dods")
@@ -320,7 +320,7 @@ class TestUnexpectedExceptionHandling:
 
     def test_dap4_data_unexpected_error(self, err_client):
         with patch(
-            "xpublish_opendap.plugin.load_dataset_async",
+            "xpublish_opendap.plugin.generate_dap4_data",
             side_effect=RuntimeError("boom"),
         ):
             resp = err_client.get("/datasets/test/opendap.dap")
