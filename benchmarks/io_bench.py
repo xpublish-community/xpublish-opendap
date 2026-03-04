@@ -51,12 +51,11 @@ if _project_root not in sys.path:
 
 import dask
 
+from benchmarks.run import load_dataset
 from xpublish_opendap.dap.dap2.dods import _xdr_encode_array, _xdr_encode_slab_data
 from xpublish_opendap.dap.dap4.data import _dap4_encode_variable
 from xpublish_opendap.dap.types import cf_encode_variable, resolve_dap_type
 from xpublish_opendap.io import get_slab_boundaries, load_variable, run_in_executor
-
-from benchmarks.run import load_dataset
 
 # Default rechunk byte budget for dask-graph strategy (matches old opendap-protocol)
 _RECHUNK_BYTES = 20_000_000
@@ -111,9 +110,9 @@ def _load_and_encode_full(
     encoded_var = cf_encode_variable(da.variable)
     data = np.asarray(encoded_var.data)
     dap_type = resolve_dap_type(encoded_var.dtype, protocol=protocol)
-    if protocol == 'dap4':
-        return b''.join(_dap4_encode_variable(data, dap_type))
-    return b''.join(_xdr_encode_array(data, dap_type))
+    if protocol == "dap4":
+        return b"".join(_dap4_encode_variable(data, dap_type))
+    return b"".join(_xdr_encode_array(data, dap_type))
 
 
 def _load_and_encode_slab(
@@ -130,12 +129,12 @@ def _load_and_encode_slab(
     encoded_var = cf_encode_variable(slab.variable)
     data = np.asarray(encoded_var.data)
     dap_type = resolve_dap_type(encoded_var.dtype, protocol=protocol)
-    if protocol == 'dap4':
+    if protocol == "dap4":
         if data.ndim == 0:
             data = data.reshape(1)
-        target_dtype = data.dtype.newbyteorder('=')
+        target_dtype = data.dtype.newbyteorder("=")
         return data.astype(target_dtype, copy=False).tobytes()
-    return b''.join(_xdr_encode_slab_data(data, dap_type))
+    return b"".join(_xdr_encode_slab_data(data, dap_type))
 
 
 def _dask_graph_encode_full(
@@ -154,23 +153,23 @@ def _dask_graph_encode_full(
     """
     dap_type = resolve_dap_type(da.dtype, protocol=protocol)
 
-    if protocol == 'dap4':
-        wire_dtype = da.dtype.newbyteorder('=')
+    if protocol == "dap4":
+        wire_dtype = da.dtype.newbyteorder("=")
     elif dap_type.xdr_format is not None:
         wire_dtype = np.dtype(dap_type.xdr_format)
     else:
         wire_dtype = da.dtype
 
-    if hasattr(da.data, 'chunks') and da.data.chunks is not None:
+    if hasattr(da.data, "chunks") and da.data.chunks is not None:
         arr = da.data
         chunk_elems = max(1, int(rechunk_bytes / max(arr.dtype.itemsize, 1)))
         flat = arr.ravel().rechunk(chunk_elems)
 
         parts = []
-        with dask.config.set(scheduler='threads', num_workers=dask_num_workers):
+        with dask.config.set(scheduler="threads", num_workers=dask_num_workers):
             for block in flat.blocks:
                 parts.append(block.astype(wire_dtype).compute().tobytes())
-        return b''.join(parts)
+        return b"".join(parts)
     else:
         data = np.asarray(da.data)
         return data.astype(wire_dtype).tobytes()
@@ -184,7 +183,7 @@ def _load_and_encode_nocf(
     """Like eager but skip cf_encode_variable for non-datetime types."""
     load_variable(da, dask_num_workers)
 
-    if da.dtype.kind in ('M', 'm'):
+    if da.dtype.kind in ("M", "m"):
         encoded_var = cf_encode_variable(da.variable)
         data = np.asarray(encoded_var.data)
         dap_type = resolve_dap_type(encoded_var.dtype, protocol=protocol)
@@ -192,9 +191,9 @@ def _load_and_encode_nocf(
         data = np.asarray(da.data)
         dap_type = resolve_dap_type(da.dtype, protocol=protocol)
 
-    if protocol == 'dap4':
-        return b''.join(_dap4_encode_variable(data, dap_type))
-    return b''.join(_xdr_encode_array(data, dap_type))
+    if protocol == "dap4":
+        return b"".join(_dap4_encode_variable(data, dap_type))
+    return b"".join(_xdr_encode_array(data, dap_type))
 
 
 # ---------------------------------------------------------------------------
@@ -211,7 +210,9 @@ async def eager_load_encode(
 
     Dask parallelizes all chunk fetches. Single yield of all bytes.
     """
-    result = await run_in_executor(_load_and_encode_full, da, protocol, dask_num_workers)
+    result = await run_in_executor(
+        _load_and_encode_full, da, protocol, dask_num_workers
+    )
     yield result
 
 
@@ -225,7 +226,9 @@ async def dask_graph_encode(
     Tests hypothesis: is the dask ravel/rechunk/block approach fundamentally
     faster than load-then-encode?
     """
-    result = await run_in_executor(_dask_graph_encode_full, da, protocol, dask_num_workers)
+    result = await run_in_executor(
+        _dask_graph_encode_full, da, protocol, dask_num_workers
+    )
     yield result
 
 
@@ -238,7 +241,9 @@ async def eager_nocf_load_encode(
 
     Tests hypothesis: does cf_encode_variable add significant overhead?
     """
-    result = await run_in_executor(_load_and_encode_nocf, da, protocol, dask_num_workers)
+    result = await run_in_executor(
+        _load_and_encode_nocf, da, protocol, dask_num_workers
+    )
     yield result
 
 
@@ -275,7 +280,9 @@ async def slab_stream(
     slab_info = get_slab_boundaries(da, threshold_bytes=0)
     if slab_info is None:
         # No slab streaming possible (in-memory or single outer chunk) — fall back to eager
-        result = await run_in_executor(_load_and_encode_full, da, protocol, dask_num_workers)
+        result = await run_in_executor(
+            _load_and_encode_full, da, protocol, dask_num_workers
+        )
         yield result
         return
 
@@ -289,8 +296,14 @@ async def slab_stream(
         start, stop = batched[i]
         task = asyncio.ensure_future(
             run_in_executor(
-                _load_and_encode_slab, da, dim, start, stop, protocol, dask_num_workers
-            )
+                _load_and_encode_slab,
+                da,
+                dim,
+                start,
+                stop,
+                protocol,
+                dask_num_workers,
+            ),
         )
         pending.append(task)
 
@@ -304,8 +317,14 @@ async def slab_stream(
             start, stop = batched[next_to_launch]
             task = asyncio.ensure_future(
                 run_in_executor(
-                    _load_and_encode_slab, da, dim, start, stop, protocol, dask_num_workers
-                )
+                    _load_and_encode_slab,
+                    da,
+                    dim,
+                    start,
+                    stop,
+                    protocol,
+                    dask_num_workers,
+                ),
             )
             pending.append(task)
             next_to_launch += 1
@@ -337,7 +356,7 @@ def _serialize_isel(isel: dict) -> str:
 
     def _encode(v):
         if isinstance(v, slice):
-            return {'__slice__': True, 'start': v.start, 'stop': v.stop, 'step': v.step}
+            return {"__slice__": True, "start": v.start, "stop": v.stop, "step": v.step}
         return v
 
     return json.dumps({k: _encode(v) for k, v in isel.items()})
@@ -348,8 +367,8 @@ def _deserialize_isel(s: str) -> dict:
     raw = json.loads(s)
 
     def _decode(v):
-        if isinstance(v, dict) and v.get('__slice__'):
-            return slice(v.get('start'), v.get('stop'), v.get('step'))
+        if isinstance(v, dict) and v.get("__slice__"):
+            return slice(v.get("start"), v.get("stop"), v.get("step"))
         return v
 
     return {k: _decode(v) for k, v in raw.items()}
@@ -369,58 +388,67 @@ def _run_isolated_trial(
     cmd = [
         sys.executable,
         str(Path(__file__).resolve()),
-        '--_trial',
-        '--dataset', dataset,
-        '--var', var_name,
-        '--_isel', isel_json,
-        '--strategy', strategy,
-        '--encoding', encoding,
-        '--batch-sizes', str(batch_size),
-        '--dask-workers', str(dask_workers),
+        "--_trial",
+        "--dataset",
+        dataset,
+        "--var",
+        var_name,
+        "--_isel",
+        isel_json,
+        "--strategy",
+        strategy,
+        "--encoding",
+        encoding,
+        "--batch-sizes",
+        str(batch_size),
+        "--dask-workers",
+        str(dask_workers),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     if result.returncode != 0:
         raise RuntimeError(
-            f'Subprocess trial failed (exit {result.returncode}):\n{result.stderr}'
+            f"Subprocess trial failed (exit {result.returncode}):\n{result.stderr}",
         )
     # Find the JSON line in stdout (skip any other output)
     for line in result.stdout.strip().splitlines():
         line = line.strip()
-        if line.startswith('{'):
+        if line.startswith("{"):
             data = json.loads(line)
             return TrialResult(
-                strategy=data['strategy'],
-                scenario=data['scenario'],
-                ttfb_s=data['ttfb_s'],
-                total_s=data['total_s'],
-                encoded_bytes=data['encoded_bytes'],
-                n_slabs=data['n_slabs'],
+                strategy=data["strategy"],
+                scenario=data["scenario"],
+                ttfb_s=data["ttfb_s"],
+                total_s=data["total_s"],
+                encoded_bytes=data["encoded_bytes"],
+                n_slabs=data["n_slabs"],
             )
-    raise RuntimeError(f'No JSON result in subprocess output:\n{result.stdout}')
+    raise RuntimeError(f"No JSON result in subprocess output:\n{result.stdout}")
 
 
 async def _trial_subprocess_main(args: argparse.Namespace) -> None:
     """Entry point for --_trial subprocess mode: run one trial, print JSON, exit."""
-    protocol = 'dap4' if args.encoding == 'dap4' else 'dap2'
+    protocol = "dap4" if args.encoding == "dap4" else "dap2"
     ds, _dataset_id = load_dataset(args.dataset)
     var_name = args.var
     isel = _deserialize_isel(args._isel)
     da = ds[var_name].isel(isel)
 
     strategy = args.strategy
-    batch_sizes = [int(x) for x in args.batch_sizes.split(',')]
+    batch_sizes = [int(x) for x in args.batch_sizes.split(",")]
     batch_size = batch_sizes[0] if batch_sizes else 1
 
-    trial = await run_trial(da, strategy, protocol, args.dask_workers, batch_size=batch_size)
-    trial.scenario = ''
+    trial = await run_trial(
+        da, strategy, protocol, args.dask_workers, batch_size=batch_size
+    )
+    trial.scenario = ""
 
     result = {
-        'strategy': trial.strategy,
-        'scenario': trial.scenario,
-        'ttfb_s': trial.ttfb_s,
-        'total_s': trial.total_s,
-        'encoded_bytes': trial.encoded_bytes,
-        'n_slabs': trial.n_slabs,
+        "strategy": trial.strategy,
+        "scenario": trial.scenario,
+        "ttfb_s": trial.ttfb_s,
+        "total_s": trial.total_s,
+        "encoded_bytes": trial.encoded_bytes,
+        "n_slabs": trial.n_slabs,
     }
     print(json.dumps(result), flush=True)
 
@@ -441,32 +469,36 @@ async def run_trial(
     slab_info = get_slab_boundaries(da, threshold_bytes=0)
     boundaries = slab_info[1] if slab_info is not None else None
 
-    if strategy == 'eager':
+    if strategy == "eager":
         gen = eager_load_encode(da, protocol, dask_num_workers)
         n_slabs = 0
-    elif strategy == 'dask-graph':
+    elif strategy == "dask-graph":
         gen = dask_graph_encode(da, protocol, dask_num_workers)
         n_slabs = 0
-    elif strategy == 'eager-nocf':
+    elif strategy == "eager-nocf":
         gen = eager_nocf_load_encode(da, protocol, dask_num_workers)
         n_slabs = 0
-    elif strategy == 'eager-sync':
+    elif strategy == "eager-sync":
         gen = eager_sync_load_encode(da, protocol, dask_num_workers)
         n_slabs = 0
-    elif strategy.startswith('slab-prefetch-'):
-        prefetch = int(strategy.split('-')[-1])
-        gen = slab_stream(da, protocol, dask_num_workers, prefetch=prefetch, batch_size=1)
+    elif strategy.startswith("slab-prefetch-"):
+        prefetch = int(strategy.split("-")[-1])
+        gen = slab_stream(
+            da, protocol, dask_num_workers, prefetch=prefetch, batch_size=1
+        )
         n_slabs = len(boundaries) if boundaries else 0
-    elif strategy == 'slab-batch':
-        gen = slab_stream(da, protocol, dask_num_workers, prefetch=1, batch_size=batch_size)
+    elif strategy == "slab-batch":
+        gen = slab_stream(
+            da, protocol, dask_num_workers, prefetch=1, batch_size=batch_size
+        )
         if boundaries:
             n_slabs = -(-len(boundaries) // batch_size)  # ceiling division
         else:
             n_slabs = 0
     else:
-        raise ValueError(f'Unknown strategy: {strategy}')
+        raise ValueError(f"Unknown strategy: {strategy}")
 
-    display_name = f'slab-batch-{batch_size}' if strategy == 'slab-batch' else strategy
+    display_name = f"slab-batch-{batch_size}" if strategy == "slab-batch" else strategy
 
     total_bytes = 0
     ttfb = None
@@ -481,7 +513,7 @@ async def run_trial(
 
     return TrialResult(
         strategy=display_name,
-        scenario='',
+        scenario="",
         ttfb_s=ttfb if ttfb is not None else total,
         total_s=total,
         encoded_bytes=total_bytes,
@@ -513,7 +545,7 @@ def build_scenarios(ds: xr.Dataset, var_name: str) -> list[Scenario]:
     shape = da.shape
 
     if da.ndim < 2:
-        return [Scenario(name='full', isel={}, description=f'Full variable {var_name}')]
+        return [Scenario(name="full", isel={}, description=f"Full variable {var_name}")]
 
     spatial_shape = shape[1:]
     sp_sizes = _spatial_sizes(spatial_shape)
@@ -524,29 +556,35 @@ def build_scenarios(ds: xr.Dataset, var_name: str) -> list[Scenario]:
     isel_1t: dict = {dims[0]: slice(0, 1)}
     for i, dim in enumerate(dims[1:]):
         isel_1t[dim] = slice(0, sp_sizes[i])
-    scenarios.append(Scenario(
-        name='1-timestep',
-        isel=isel_1t,
-        description=f'1 outer step, spatial budget-capped',
-    ))
+    scenarios.append(
+        Scenario(
+            name="1-timestep",
+            isel=isel_1t,
+            description="1 outer step, spatial budget-capped",
+        ),
+    )
 
     # 10-timesteps: 10 outer steps, spatial dims budget-capped
     t_end = min(10, shape[0])
     isel_10t: dict = {dims[0]: slice(0, t_end)}
     for i, dim in enumerate(dims[1:]):
         isel_10t[dim] = slice(0, sp_sizes[i])
-    scenarios.append(Scenario(
-        name='10-timesteps',
-        isel=isel_10t,
-        description=f'{t_end} outer steps, spatial budget-capped',
-    ))
+    scenarios.append(
+        Scenario(
+            name="10-timesteps",
+            isel=isel_10t,
+            description=f"{t_end} outer steps, spatial budget-capped",
+        ),
+    )
 
     # full-spatial-1t: 1 outer step, full spatial extent
-    scenarios.append(Scenario(
-        name='full-spatial-1t',
-        isel={dims[0]: slice(0, 1)},
-        description='1 outer step, full spatial extent',
-    ))
+    scenarios.append(
+        Scenario(
+            name="full-spatial-1t",
+            isel={dims[0]: slice(0, 1)},
+            description="1 outer step, full spatial extent",
+        ),
+    )
 
     return scenarios
 
@@ -566,22 +604,22 @@ def _find_data_var(ds: xr.Dataset, min_ndim: int = 3) -> str | None:
 
 def _fmt_time(seconds: float) -> str:
     if seconds < 0.001:
-        return f'{seconds * 1_000_000:.0f}us'
+        return f"{seconds * 1_000_000:.0f}us"
     if seconds < 1.0:
-        return f'{seconds * 1000:.0f}ms'
-    return f'{seconds:.2f}s'
+        return f"{seconds * 1000:.0f}ms"
+    return f"{seconds:.2f}s"
 
 
 def _fmt_throughput(mbps: float) -> str:
     if mbps >= 1.0:
-        return f'{mbps:.1f} MB/s'
-    return f'{mbps * 1024:.0f} KB/s'
+        return f"{mbps:.1f} MB/s"
+    return f"{mbps * 1024:.0f} KB/s"
 
 
 def _print_round_detail(round_results: list[TrialResult], round_label: str) -> None:
     """Print a single line showing each strategy's timing for one round."""
-    parts = [f'{r.strategy} {_fmt_time(r.total_s)}' for r in round_results]
-    print(f'  {round_label:>10}:  {" | ".join(parts)}')
+    parts = [f"{r.strategy} {_fmt_time(r.total_s)}" for r in round_results]
+    print(f"  {round_label:>10}:  {' | '.join(parts)}")
 
 
 def print_summary(results: list[TrialResult]) -> None:
@@ -590,8 +628,8 @@ def print_summary(results: list[TrialResult]) -> None:
     for r in results:
         grouped[r.strategy].append(r)
 
-    header = f'{"Strategy":<22} {"TTFB(med)":>10} {"Total(med)":>10} {"Throughput":>12} {"Slabs":>6}'
-    sep = '\u2500' * len(header)
+    header = f"{'Strategy':<22} {'TTFB(med)':>10} {'Total(med)':>10} {'Throughput':>12} {'Slabs':>6}"
+    sep = "\u2500" * len(header)
     print(header)
     print(sep)
 
@@ -600,13 +638,13 @@ def print_summary(results: list[TrialResult]) -> None:
         med_total = statistics.median(t.total_s for t in trials)
         med_throughput = statistics.median(t.throughput_mbps for t in trials)
         n_slabs = trials[0].n_slabs
-        slabs_str = str(n_slabs) if n_slabs > 0 else '-'
+        slabs_str = str(n_slabs) if n_slabs > 0 else "-"
         print(
-            f'{strategy:<22} '
-            f'{_fmt_time(med_ttfb):>10} '
-            f'{_fmt_time(med_total):>10} '
-            f'{_fmt_throughput(med_throughput):>12} '
-            f'{slabs_str:>6}'
+            f"{strategy:<22} "
+            f"{_fmt_time(med_ttfb):>10} "
+            f"{_fmt_time(med_total):>10} "
+            f"{_fmt_throughput(med_throughput):>12} "
+            f"{slabs_str:>6}",
         )
 
     print(sep)
@@ -617,75 +655,76 @@ def print_summary(results: list[TrialResult]) -> None:
 # ---------------------------------------------------------------------------
 
 ALL_STRATEGIES = [
-    'eager',
-    'dask-graph',
-    'eager-nocf',
-    'eager-sync',
-    'slab-prefetch-1',
-    'slab-prefetch-2',
-    'slab-batch',
+    "eager",
+    "dask-graph",
+    "eager-nocf",
+    "eager-sync",
+    "slab-prefetch-1",
+    "slab-prefetch-2",
+    "slab-batch",
 ]
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description='Standalone IO performance benchmark for xpublish-opendap',
+        description="Standalone IO performance benchmark for xpublish-opendap",
     )
     parser.add_argument(
-        '--dataset',
-        choices=['ifs', 'air'],
-        default='air',
-        help='Dataset to benchmark (default: air)',
+        "--dataset",
+        choices=["ifs", "air"],
+        default="air",
+        help="Dataset to benchmark (default: air)",
     )
     parser.add_argument(
-        '-n', '--iterations',
+        "-n",
+        "--iterations",
         type=int,
         default=3,
-        help='Iterations per strategy (default: 3)',
+        help="Iterations per strategy (default: 3)",
     )
     parser.add_argument(
-        '--scenario',
+        "--scenario",
         help='Run only this scenario (e.g. "10-timesteps")',
     )
     parser.add_argument(
-        '--strategy',
-        help='Comma-separated strategies (default: all)',
+        "--strategy",
+        help="Comma-separated strategies (default: all)",
     )
     parser.add_argument(
-        '--encoding',
-        choices=['xdr', 'dap4'],
-        default='xdr',
-        help='Encoding format (default: xdr)',
+        "--encoding",
+        choices=["xdr", "dap4"],
+        default="xdr",
+        help="Encoding format (default: xdr)",
     )
     parser.add_argument(
-        '--var',
-        help='Variable name to benchmark (default: auto-detect)',
+        "--var",
+        help="Variable name to benchmark (default: auto-detect)",
     )
     parser.add_argument(
-        '--batch-sizes',
-        default='5',
-        help='Comma-separated batch sizes for slab-batch strategy (default: 5)',
+        "--batch-sizes",
+        default="5",
+        help="Comma-separated batch sizes for slab-batch strategy (default: 5)",
     )
     parser.add_argument(
-        '--dask-workers',
+        "--dask-workers",
         type=int,
         default=4,
-        help='Dask thread count for chunk loading (default: 4)',
+        help="Dask thread count for chunk loading (default: 4)",
     )
     parser.add_argument(
-        '--warmup',
+        "--warmup",
         type=int,
         default=None,
-        help='Warmup rounds before timed iterations (default: 1, or 0 with --isolate)',
+        help="Warmup rounds before timed iterations (default: 1, or 0 with --isolate)",
     )
     parser.add_argument(
-        '--isolate',
-        action='store_true',
-        help='Run each trial in a subprocess for cache isolation',
+        "--isolate",
+        action="store_true",
+        help="Run each trial in a subprocess for cache isolation",
     )
     # Hidden arguments for subprocess trial mode
-    parser.add_argument('--_trial', action='store_true', help=argparse.SUPPRESS)
-    parser.add_argument('--_isel', type=str, help=argparse.SUPPRESS)
+    parser.add_argument("--_trial", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--_isel", type=str, help=argparse.SUPPRESS)
     return parser.parse_args(argv)
 
 
@@ -697,7 +736,7 @@ async def async_main(argv: list[str] | None = None) -> None:
         await _trial_subprocess_main(args)
         return
 
-    protocol = 'dap4' if args.encoding == 'dap4' else 'dap2'
+    protocol = "dap4" if args.encoding == "dap4" else "dap2"
 
     # Resolve warmup default: 0 for --isolate, 1 otherwise
     warmup = args.warmup if args.warmup is not None else (0 if args.isolate else 1)
@@ -713,13 +752,15 @@ async def async_main(argv: list[str] | None = None) -> None:
             var_name = str(next(iter(ds.data_vars)))
 
     da_full = ds[var_name]
-    print(f'{dataset_id} variable: {var_name}  shape: {da_full.shape}')
-    if hasattr(da_full.data, 'chunks') and da_full.data.chunks is not None:
-        print(f'  chunks: {da_full.data.chunks}')
+    print(f"{dataset_id} variable: {var_name}  shape: {da_full.shape}")
+    if hasattr(da_full.data, "chunks") and da_full.data.chunks is not None:
+        print(f"  chunks: {da_full.data.chunks}")
     else:
-        print('  chunks: none (in-memory)')
-    mode_str = 'isolated' if args.isolate else 'interleaved'
-    print(f'  encoding: {args.encoding}  |  iterations: {args.iterations}  |  warmup: {warmup}  |  mode: {mode_str}')
+        print("  chunks: none (in-memory)")
+    mode_str = "isolated" if args.isolate else "interleaved"
+    print(
+        f"  encoding: {args.encoding}  |  iterations: {args.iterations}  |  warmup: {warmup}  |  mode: {mode_str}"
+    )
 
     # Build scenarios
     scenarios = build_scenarios(ds, var_name)
@@ -730,37 +771,37 @@ async def async_main(argv: list[str] | None = None) -> None:
             sys.exit(1)
 
     # Parse strategies
-    batch_sizes = [int(x) for x in args.batch_sizes.split(',')]
+    batch_sizes = [int(x) for x in args.batch_sizes.split(",")]
     if args.strategy:
-        strategies = [s.strip() for s in args.strategy.split(',')]
+        strategies = [s.strip() for s in args.strategy.split(",")]
     else:
         strategies = list(ALL_STRATEGIES)
 
     # Expand slab-batch into per-batch-size entries
     expanded: list[tuple[str, int]] = []
     for s in strategies:
-        if s == 'slab-batch':
+        if s == "slab-batch":
             for bs in batch_sizes:
-                expanded.append(('slab-batch', bs))
+                expanded.append(("slab-batch", bs))
         else:
             expanded.append((s, 1))
 
     for scenario in scenarios:
         da = ds[var_name].isel(scenario.isel)
 
-        chunks_str = ''
-        if hasattr(da.data, 'chunks') and da.data.chunks is not None:
-            chunks_str = f'  chunks: {da.data.chunks}'
+        chunks_str = ""
+        if hasattr(da.data, "chunks") and da.data.chunks is not None:
+            chunks_str = f"  chunks: {da.data.chunks}"
         else:
-            chunks_str = '  chunks: none (in-memory)'
+            chunks_str = "  chunks: none (in-memory)"
 
         print()
-        print(f'--- {scenario.name}: {scenario.description} ---')
-        print(f'  shape: {da.shape}{chunks_str}')
+        print(f"--- {scenario.name}: {scenario.description} ---")
+        print(f"  shape: {da.shape}{chunks_str}")
 
         slab_info = get_slab_boundaries(da, threshold_bytes=0)
-        if slab_info is None and any(s != 'eager' for s, _ in expanded):
-            print('  (no dask chunks — slab strategies will fall back to eager)')
+        if slab_info is None and any(s != "eager" for s, _ in expanded):
+            print("  (no dask chunks — slab strategies will fall back to eager)")
 
         print()
 
@@ -770,8 +811,8 @@ async def async_main(argv: list[str] | None = None) -> None:
         # Phases: warmup rounds, then timed rounds — each round iterates all strategies
         phases: list[tuple[str, int, bool]] = []
         if warmup > 0:
-            phases.append(('Warmup', warmup, True))
-        phases.append(('Round', args.iterations, False))
+            phases.append(("Warmup", warmup, True))
+        phases.append(("Round", args.iterations, False))
 
         if args.isolate:
             for phase_label, n_rounds, is_warmup in phases:
@@ -791,7 +832,7 @@ async def async_main(argv: list[str] | None = None) -> None:
                         trial.iteration = r
                         trial.is_warmup = is_warmup
                         round_results.append(trial)
-                    _print_round_detail(round_results, f'{phase_label} {r + 1}')
+                    _print_round_detail(round_results, f"{phase_label} {r + 1}")
                     all_results.extend(round_results)
         else:
             for phase_label, n_rounds, is_warmup in phases:
@@ -809,7 +850,7 @@ async def async_main(argv: list[str] | None = None) -> None:
                         trial.iteration = r
                         trial.is_warmup = is_warmup
                         round_results.append(trial)
-                    _print_round_detail(round_results, f'{phase_label} {r + 1}')
+                    _print_round_detail(round_results, f"{phase_label} {r + 1}")
                     all_results.extend(round_results)
 
         timed = [r for r in all_results if not r.is_warmup]
@@ -821,5 +862,5 @@ def main(argv: list[str] | None = None) -> None:
     asyncio.run(async_main(argv))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
