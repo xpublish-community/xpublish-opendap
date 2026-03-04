@@ -408,6 +408,141 @@ class TestDaskGraphFastPath:
             assert d_crc == n_crc
 
 
+class TestSlabFallbackPaths:
+    """Tests exercising the non-dask fallback paths in slab encoding functions.
+
+    These paths are reached when _is_dask_graph_eligible returns False for a
+    slab (e.g. numpy-backed arrays passed to the slab encoders directly).
+    """
+
+    def test_xdr_encode_slab_data_byte(self):
+        """_xdr_encode_slab_data handles Byte (uint8) arrays."""
+        from xpublish_opendap.dap.dap2.dods import _xdr_encode_slab_data
+        from xpublish_opendap.dap.types import DAP_BYTE
+
+        data = np.array([1, 2, 3], dtype=np.uint8)
+        result = b''.join(_xdr_encode_slab_data(data, DAP_BYTE))
+        assert result == data.tobytes()
+
+    def test_xdr_encode_slab_data_int16_widening(self):
+        """_xdr_encode_slab_data widens Int16 to 4-byte signed."""
+        from xpublish_opendap.dap.dap2.dods import _xdr_encode_slab_data
+        from xpublish_opendap.dap.types import resolve_dap_type
+
+        data = np.array([1, -2, 3], dtype=np.int16)
+        dap_type = resolve_dap_type(data.dtype)
+        result = b''.join(_xdr_encode_slab_data(data, dap_type))
+        expected = data.astype('>i4').tobytes()
+        assert result == expected
+
+    def test_xdr_encode_slab_data_uint16_widening(self):
+        """_xdr_encode_slab_data widens UInt16 to 4-byte unsigned."""
+        from xpublish_opendap.dap.dap2.dods import _xdr_encode_slab_data
+        from xpublish_opendap.dap.types import resolve_dap_type
+
+        data = np.array([1, 2, 300], dtype=np.uint16)
+        dap_type = resolve_dap_type(data.dtype)
+        result = b''.join(_xdr_encode_slab_data(data, dap_type))
+        expected = data.astype('>u4').tobytes()
+        assert result == expected
+
+    def test_xdr_encode_slab_data_float64_standard(self):
+        """_xdr_encode_slab_data handles standard float64."""
+        from xpublish_opendap.dap.dap2.dods import _xdr_encode_slab_data
+        from xpublish_opendap.dap.types import resolve_dap_type
+
+        data = np.array([1.0, 2.5, 3.0], dtype=np.float64)
+        dap_type = resolve_dap_type(data.dtype)
+        result = b''.join(_xdr_encode_slab_data(data, dap_type))
+        expected = data.astype(np.dtype(dap_type.xdr_format)).tobytes()
+        assert result == expected
+
+    def test_xdr_encode_slab_data_scalar(self):
+        """_xdr_encode_slab_data reshapes scalar to 1-element array."""
+        from xpublish_opendap.dap.dap2.dods import _xdr_encode_slab_data
+        from xpublish_opendap.dap.types import resolve_dap_type
+
+        data = np.float64(42.0)
+        dap_type = resolve_dap_type(data.dtype)
+        result = b''.join(_xdr_encode_slab_data(data, dap_type))
+        expected = np.array([42.0], dtype=np.dtype(dap_type.xdr_format)).tobytes()
+        assert result == expected
+
+    def test_load_and_encode_slab_xdr_numpy_fallback(self):
+        """_load_and_encode_slab_xdr falls back to numpy path for non-dask slabs."""
+        from xpublish_opendap.dap.dap2.dods import _load_and_encode_slab_xdr
+        from xpublish_opendap.dap.types import resolve_dap_type
+
+        # Create a numpy-backed DataArray (not dask)
+        data = np.arange(12, dtype='float64').reshape(3, 4)
+        da = xr.DataArray(data, dims=['time', 'x'])
+        dap_type = resolve_dap_type(da.dtype)
+
+        # Call slab encoder directly with a numpy array — exercises fallback
+        result = _load_and_encode_slab_xdr(da, 'time', 0, 2, 4, dap_type)
+        # Should produce XDR data bytes for the first 2 rows (8 elements)
+        expected_data = data[0:2].astype(np.dtype(dap_type.xdr_format)).tobytes()
+        assert result == expected_data
+
+    def test_load_and_encode_slab_dap4_numpy_fallback(self):
+        """_load_and_encode_slab_dap4 falls back to numpy path for non-dask slabs."""
+        from xpublish_opendap.dap.dap4.data import _load_and_encode_slab_dap4
+
+        # Create a numpy-backed DataArray (not dask)
+        data = np.arange(12, dtype='float64').reshape(3, 4)
+        da = xr.DataArray(data, dims=['time', 'x'])
+
+        # Call slab encoder directly with a numpy array — exercises fallback
+        result = _load_and_encode_slab_dap4(da, 'time', 0, 2, 4)
+        expected_data = data[0:2].astype(data.dtype.newbyteorder('=')).tobytes()
+        assert result == expected_data
+
+    def test_load_and_encode_slab_dap4_numpy_scalar_reshape(self):
+        """_load_and_encode_slab_dap4 fallback handles 0-d slice (scalar reshape)."""
+        from xpublish_opendap.dap.dap4.data import _load_and_encode_slab_dap4
+
+        # 1-D array, single-element slice → after isel, data is 0-d
+        data = np.array([42.0], dtype='float64')
+        da = xr.DataArray(data, dims=['x'])
+
+        result = _load_and_encode_slab_dap4(da, 'x', 0, 1, 4)
+        native_dtype = np.dtype('float64').newbyteorder('=')
+        expected = np.array([42.0]).astype(native_dtype).tobytes()
+        assert result == expected
+
+
+class TestDaskGraphBytePadding:
+    """Test the dask-graph fast path's Byte padding logic in _load_and_encode_xdr."""
+
+    async def test_dods_byte_padding_dask_graph(self):
+        """uint8 dask array with non-multiple-of-4 size gets correct padding."""
+        # 3 elements → 3 bytes data + 1 byte padding
+        data = np.array([1, 2, 3], dtype='uint8')
+        ds = xr.Dataset(
+            {'vals': xr.DataArray(data, dims=['x'])},
+            coords={'x': np.arange(3, dtype='float64')},
+        ).chunk({'x': 3})
+        ds_numpy = ds.compute()
+
+        dods_dask = await _collect(generate_dods(ds, 'test'))
+        dods_numpy = await _collect(generate_dods(ds_numpy, 'test'))
+        assert dods_dask == dods_numpy
+
+    async def test_dods_byte_no_padding_needed(self):
+        """uint8 dask array with multiple-of-4 size needs no padding."""
+        # 4 elements → 4 bytes, no padding needed
+        data = np.array([1, 2, 3, 4], dtype='uint8')
+        ds = xr.Dataset(
+            {'vals': xr.DataArray(data, dims=['x'])},
+            coords={'x': np.arange(4, dtype='float64')},
+        ).chunk({'x': 4})
+        ds_numpy = ds.compute()
+
+        dods_dask = await _collect(generate_dods(ds, 'test'))
+        dods_numpy = await _collect(generate_dods(ds_numpy, 'test'))
+        assert dods_dask == dods_numpy
+
+
 class TestDatetimeHandling:
     """Tests for datetime64/timedelta64 arrays.
 

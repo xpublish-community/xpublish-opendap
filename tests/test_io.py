@@ -3,6 +3,7 @@
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from unittest import mock
 
 import numpy as np
 import pytest
@@ -13,9 +14,12 @@ from httpx import ASGITransport, AsyncClient
 from xpublish_opendap import OpenDapPlugin
 from xpublish_opendap.io import (
     EXECUTOR,
+    _is_dask_graph_eligible,
     get_compute_semaphore,
     get_data_load_semaphore,
+    get_slab_boundaries,
     load_dataset_async,
+    load_variable,
     run_in_executor,
 )
 
@@ -155,3 +159,35 @@ class TestConcurrentRequests:
             dmr_coros = [client.get("/datasets/test/opendap.dmr") for _ in range(5)]
             responses = await asyncio.gather(*dds_coros, *dmr_coros)
         assert all(r.status_code == 200 for r in responses)
+
+
+class TestNoDaskFallbacks:
+    """Test io.py behavior when HAS_DASK is False (simulating no dask installed)."""
+
+    def test_get_slab_boundaries_returns_none_without_dask(self):
+        """get_slab_boundaries returns None when HAS_DASK is False."""
+        da = xr.DataArray(np.arange(12, dtype="float64").reshape(3, 4), dims=["y", "x"])
+        with mock.patch("xpublish_opendap.io.HAS_DASK", False):
+            result = get_slab_boundaries(da, threshold_bytes=0)
+        assert result is None
+
+    def test_is_dask_graph_eligible_returns_false_without_dask(self):
+        """_is_dask_graph_eligible returns False when HAS_DASK is False."""
+        da = xr.DataArray(np.arange(12, dtype="float64"), dims=["x"])
+        with mock.patch("xpublish_opendap.io.HAS_DASK", False):
+            assert _is_dask_graph_eligible(da) is False
+
+    def test_load_variable_without_dask(self):
+        """load_variable calls var.load() without dask config when HAS_DASK is False."""
+        da = xr.DataArray(np.arange(5, dtype="float64"), dims=["x"])
+        with mock.patch("xpublish_opendap.io.HAS_DASK", False):
+            load_variable(da)
+        # Should still work — just calls .load() directly
+        np.testing.assert_array_equal(da.values, np.arange(5, dtype="float64"))
+
+    async def test_load_dataset_async_without_dask(self, simple_ds):
+        """load_dataset_async works when HAS_DASK is False."""
+        with mock.patch("xpublish_opendap.io.HAS_DASK", False):
+            result = await load_dataset_async(simple_ds)
+        assert isinstance(result, xr.Dataset)
+        np.testing.assert_array_equal(result["temp"].values, simple_ds["temp"].values)
