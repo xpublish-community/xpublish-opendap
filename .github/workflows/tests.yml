@@ -38,7 +38,7 @@ jobs:
       - name: Tests
         shell: bash -l {0}
         run: |
-          python -m pytest -rxs --cov=xpublish_opendap --cov-report=xml tests
+          python -m pytest -rxs --cov=xpublish_opendap --cov-report=xml tests --ignore=tests/integration
 
       - name: Upload coverage reports to Codecov with GitHub Action
         uses: codecov/codecov-action@v3

@@ -191,9 +191,16 @@ class TestDODS:
         data = b"".join(chunks)
         binary = data.split(DATA_SEPARATOR)[1]
 
-        # x is a Grid Map of var, so no top-level coordinate binary.
-        # var (Grid): main array length(2) twice + data
+        # Top-level x coordinate: length(2) twice + 2×float64
         offset = 0
+        n1, n2 = struct.unpack(">II", binary[offset : offset + 8])
+        assert n1 == 2
+        offset += 8
+        coord_vals = struct.unpack(">2d", binary[offset : offset + 16])
+        np.testing.assert_array_almost_equal(coord_vals, [10.0, 20.0])
+        offset += 16
+
+        # var (Grid array): length(2) twice + 2×float64
         n1, n2 = struct.unpack(">II", binary[offset : offset + 8])
         assert n1 == 2
         offset += 8
@@ -201,7 +208,7 @@ class TestDODS:
         np.testing.assert_array_almost_equal(var_vals, [1.0, 2.0])
         offset += 16
 
-        # Grid map (x): length(2) twice + data
+        # Grid map (x): length(2) twice + 2×float64
         n1, n2 = struct.unpack(">II", binary[offset : offset + 8])
         assert n1 == 2
         offset += 8
@@ -319,10 +326,17 @@ class TestDODSTypeEncoding:
             chunks.append(chunk)
         binary = b"".join(chunks).split(DATA_SEPARATOR)[1]
 
-        # x is a Grid Map of s, so no top-level coordinate binary.
-        # Grid for s: main array (string) then map (x)
+        # Top-level x coordinate (int32): length(2) twice + 2×int32
         offset = 0
+        n1, n2 = struct.unpack(">II", binary[offset : offset + 8])
+        assert n1 == 2
+        assert n2 == 2
+        offset += 8
+        coord_vals = struct.unpack(">2i", binary[offset : offset + 8])
+        assert coord_vals == (0, 1)
+        offset += 8
 
+        # Grid for s: string array then map (x)
         # String array: length prefix once (not doubled)
         n = struct.unpack(">I", binary[offset : offset + 4])[0]
         assert n == 2

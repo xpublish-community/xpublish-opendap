@@ -24,7 +24,6 @@ repos:
           - xarray
           - fastapi
           - pydantic
-          - xpublish
 
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1

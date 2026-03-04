@@ -144,18 +144,6 @@ def _xdr_encode_slab_data(data: np.ndarray, dap_type: DapType) -> Iterator[bytes
         yield data.astype(wire_dtype).tobytes()
 
 
-def _get_grid_map_coords(ds: xr.Dataset) -> set[str]:
-    """Identify coordinates used as Grid Maps of non-scalar data variables."""
-    grid_map_coords: set[str] = set()
-    for var_name in ds.data_vars:
-        var = ds[var_name]
-        if var.ndim > 0:
-            for dim in var.dims:
-                if dim in ds.coords:
-                    grid_map_coords.add(str(dim))
-    return grid_map_coords
-
-
 async def generate_dods(
     ds: xr.Dataset,
     dataset_name: str,
@@ -188,8 +176,6 @@ async def generate_dods(
     yield dds_text.encode("utf-8")
     yield DATA_SEPARATOR
 
-    grid_map_coords = _get_grid_map_coords(ds)
-
     # Load + encode all coordinates in executor (typically small 1-D arrays).
     # Cache the encoded bytes since Grid Maps are re-emitted per data variable.
     coord_encoded: dict[str, bytes] = {}
@@ -202,11 +188,9 @@ async def generate_dods(
         )
         coord_encoded[name] = coord_bytes
 
-    # Yield orphan coordinates (not referenced as Grid Maps)
+    # Yield ALL coordinates as top-level arrays (standard DAP2 behavior)
     for coord_name in ds.coords:
-        name = str(coord_name)
-        if name not in grid_map_coords:
-            yield coord_encoded[name]
+        yield coord_encoded[str(coord_name)]
 
     # Yield data variables as Grids — load + encode each in executor
     for var_name in ds.data_vars:

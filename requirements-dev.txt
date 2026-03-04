@@ -12,6 +12,7 @@ pre-commit
 pydap
 pylint
 pytest
+pytest-asyncio
 pytest-cov
 pytest-flake8
 pytest-github-actions-annotate-failures
