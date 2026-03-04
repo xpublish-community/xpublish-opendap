@@ -18,7 +18,7 @@ from xpublish_opendap.dap.dap4.data import (
 )
 from xpublish_opendap.io import _is_dask_graph_eligible, get_slab_boundaries
 
-pytest_plugins = []
+pytest_plugins: list[str] = []
 
 # Known chunk type top-byte values in DAP4 transport
 _DAP4_CHUNK_TYPE_BYTES = frozenset({0x00, 0x01, 0x02, 0x04, 0x05, 0x06})
@@ -480,7 +480,7 @@ class TestSlabFallbackPaths:
         from xpublish_opendap.dap.dap2.dods import _xdr_encode_slab_data
         from xpublish_opendap.dap.types import resolve_dap_type
 
-        data = np.float64(42.0)
+        data = np.array(42.0, dtype=np.float64)
         dap_type = resolve_dap_type(data.dtype)
         result = b"".join(_xdr_encode_slab_data(data, dap_type))
         expected = np.array([42.0], dtype=np.dtype(dap_type.xdr_format)).tobytes()

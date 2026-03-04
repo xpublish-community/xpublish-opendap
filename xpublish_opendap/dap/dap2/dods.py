@@ -83,7 +83,7 @@ def _load_and_encode_xdr(da: xr.DataArray, dask_num_workers: int) -> bytes:
     return b"".join(_xdr_encode_array(data, dap_type))
 
 
-def _load_and_encode_slab_xdr(
+def _load_and_encode_slab_xdr(  # noqa: PLR0913
     da: xr.DataArray,
     dim: str,
     start: int,
@@ -120,7 +120,7 @@ def _load_and_encode_slab_xdr(
 
 
 def _xdr_encode_slab_data(data: np.ndarray, dap_type: DapType) -> Iterator[bytes]:
-    """Encode a slab's numpy array as XDR data bytes without length prefix or final padding.
+    """Encode a slab's numpy array as XDR data bytes (no length prefix/padding).
 
     Args:
         data: The numpy array to encode.
@@ -220,7 +220,7 @@ async def generate_dods(
                     dap_type,
                 ),
             )
-            for i, (start, stop) in enumerate(boundaries):
+            for i, (_start, _stop) in enumerate(boundaries):
                 slab_bytes = await pending
                 if i + 1 < len(boundaries):
                     s0, s1 = boundaries[i + 1]

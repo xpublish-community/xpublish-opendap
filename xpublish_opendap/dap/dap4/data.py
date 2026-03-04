@@ -173,8 +173,6 @@ async def generate_dap4_data(
         if slab_info is not None:
             dim, boundaries = slab_info
             # Slab streaming path
-            encoded_var = cf_encode_variable(da.variable)
-            dap_type = resolve_dap_type(encoded_var.dtype, protocol="dap4")
 
             # Length prefix (uint64 LE, once)
             length_prefix = struct.pack("<Q", da.size)
@@ -193,7 +191,7 @@ async def generate_dap4_data(
                 ),
             )
 
-            for i, (start, stop) in enumerate(boundaries):
+            for i, (_start, _stop) in enumerate(boundaries):
                 slab_bytes = await pending
                 # Prefetch next slab
                 if i + 1 < len(boundaries):

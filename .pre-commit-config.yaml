@@ -17,7 +17,7 @@ repos:
     rev: v1.19.1
     hooks:
       - id: mypy
-        exclude: docs/source/conf.py
+        exclude: (docs/source/conf\.py|benchmarks/|noxfile\.py)
         additional_dependencies:
           - types-PyYAML
           - numpy
