@@ -211,7 +211,10 @@ async def eager_load_encode(
     Dask parallelizes all chunk fetches. Single yield of all bytes.
     """
     result = await run_in_executor(
-        _load_and_encode_full, da, protocol, dask_num_workers
+        _load_and_encode_full,
+        da,
+        protocol,
+        dask_num_workers,
     )
     yield result
 
@@ -227,7 +230,10 @@ async def dask_graph_encode(
     faster than load-then-encode?
     """
     result = await run_in_executor(
-        _dask_graph_encode_full, da, protocol, dask_num_workers
+        _dask_graph_encode_full,
+        da,
+        protocol,
+        dask_num_workers,
     )
     yield result
 
@@ -242,7 +248,10 @@ async def eager_nocf_load_encode(
     Tests hypothesis: does cf_encode_variable add significant overhead?
     """
     result = await run_in_executor(
-        _load_and_encode_nocf, da, protocol, dask_num_workers
+        _load_and_encode_nocf,
+        da,
+        protocol,
+        dask_num_workers,
     )
     yield result
 
@@ -281,7 +290,10 @@ async def slab_stream(
     if slab_info is None:
         # No slab streaming possible (in-memory or single outer chunk) — fall back to eager
         result = await run_in_executor(
-            _load_and_encode_full, da, protocol, dask_num_workers
+            _load_and_encode_full,
+            da,
+            protocol,
+            dask_num_workers,
         )
         yield result
         return
@@ -438,7 +450,11 @@ async def _trial_subprocess_main(args: argparse.Namespace) -> None:
     batch_size = batch_sizes[0] if batch_sizes else 1
 
     trial = await run_trial(
-        da, strategy, protocol, args.dask_workers, batch_size=batch_size
+        da,
+        strategy,
+        protocol,
+        args.dask_workers,
+        batch_size=batch_size,
     )
     trial.scenario = ""
 
@@ -484,12 +500,20 @@ async def run_trial(
     elif strategy.startswith("slab-prefetch-"):
         prefetch = int(strategy.split("-")[-1])
         gen = slab_stream(
-            da, protocol, dask_num_workers, prefetch=prefetch, batch_size=1
+            da,
+            protocol,
+            dask_num_workers,
+            prefetch=prefetch,
+            batch_size=1,
         )
         n_slabs = len(boundaries) if boundaries else 0
     elif strategy == "slab-batch":
         gen = slab_stream(
-            da, protocol, dask_num_workers, prefetch=1, batch_size=batch_size
+            da,
+            protocol,
+            dask_num_workers,
+            prefetch=1,
+            batch_size=batch_size,
         )
         if boundaries:
             n_slabs = -(-len(boundaries) // batch_size)  # ceiling division
@@ -759,7 +783,7 @@ async def async_main(argv: list[str] | None = None) -> None:
         print("  chunks: none (in-memory)")
     mode_str = "isolated" if args.isolate else "interleaved"
     print(
-        f"  encoding: {args.encoding}  |  iterations: {args.iterations}  |  warmup: {warmup}  |  mode: {mode_str}"
+        f"  encoding: {args.encoding}  |  iterations: {args.iterations}  |  warmup: {warmup}  |  mode: {mode_str}",
     )
 
     # Build scenarios

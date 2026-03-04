@@ -80,7 +80,9 @@ def _parse_dap4_variables(raw: bytes) -> tuple[bytes, list[tuple[bytes, int]]]:
 def _make_dataset(dtype="float64", time_chunks=3, time_size=3, y_size=4, x_size=5):
     """Create a dataset with a time-chunked data variable."""
     data = np.arange(time_size * y_size * x_size, dtype=dtype).reshape(
-        time_size, y_size, x_size
+        time_size,
+        y_size,
+        x_size,
     )
     ds = xr.Dataset(
         {
@@ -99,7 +101,8 @@ def _make_datetime_dataset(time_size=3, y_size=4, x_size=5):
     """Create a dataset with a datetime64 data variable (dask-backed)."""
     base = np.datetime64("2000-01-01", "ns")
     offsets = np.arange(time_size * y_size * x_size, dtype="int64") * np.timedelta64(
-        1, "h"
+        1,
+        "h",
     )
     data = (base + offsets).reshape(time_size, y_size, x_size)
     ds = xr.Dataset(
@@ -174,7 +177,7 @@ class TestDodsSlabStreaming:
         ds_numpy = ds_dask.compute()
 
         dods_slab = await _collect(
-            generate_dods(ds_dask, "test", slab_threshold_bytes=0)
+            generate_dods(ds_dask, "test", slab_threshold_bytes=0),
         )
         dods_eager = await _collect(generate_dods(ds_numpy, "test"))
         assert dods_slab == dods_eager
@@ -185,7 +188,7 @@ class TestDodsSlabStreaming:
         ds_numpy = ds_dask.compute()
 
         dods_slab = await _collect(
-            generate_dods(ds_dask, "test", slab_threshold_bytes=0)
+            generate_dods(ds_dask, "test", slab_threshold_bytes=0),
         )
         dods_eager = await _collect(generate_dods(ds_numpy, "test"))
         assert dods_slab == dods_eager
@@ -240,7 +243,7 @@ class TestDap4SlabStreaming:
         ds_numpy = ds_dask.compute()
 
         slab_raw = await _collect(
-            generate_dap4_data(ds_dask, "test", slab_threshold_bytes=0)
+            generate_dap4_data(ds_dask, "test", slab_threshold_bytes=0),
         )
         eager_raw = await _collect(generate_dap4_data(ds_numpy, "test"))
 
@@ -259,7 +262,7 @@ class TestDap4SlabStreaming:
         ds_numpy = ds_dask.compute()
 
         slab_raw = await _collect(
-            generate_dap4_data(ds_dask, "test", slab_threshold_bytes=0)
+            generate_dap4_data(ds_dask, "test", slab_threshold_bytes=0),
         )
         eager_raw = await _collect(generate_dap4_data(ds_numpy, "test"))
 
@@ -285,7 +288,7 @@ class TestDap4SlabStreaming:
         """Verify CRC32 in slab-streamed response covers the correct data."""
         ds_dask = _make_dataset(dtype="float64", time_chunks=1, time_size=3)
         slab_raw = await _collect(
-            generate_dap4_data(ds_dask, "test", slab_threshold_bytes=0)
+            generate_dap4_data(ds_dask, "test", slab_threshold_bytes=0),
         )
 
         _dmr, variables = _parse_dap4_variables(slab_raw)
@@ -310,7 +313,7 @@ class TestDap4SlabStreaming:
         ds_numpy = ds.compute()
 
         slab_raw = await _collect(
-            generate_dap4_data(ds, "test", slab_threshold_bytes=0)
+            generate_dap4_data(ds, "test", slab_threshold_bytes=0),
         )
         eager_raw = await _collect(generate_dap4_data(ds_numpy, "test"))
 
