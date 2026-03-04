@@ -29,9 +29,7 @@ if _project_root not in sys.path:
 import httpx
 import uvicorn
 import xarray as xr
-
 import xpublish
-from xpublish_opendap import OpenDapPlugin
 
 from benchmarks.results import (
     RequestResult,
@@ -42,6 +40,7 @@ from benchmarks.results import (
     write_json,
 )
 from benchmarks.scenarios import Scenario, build_scenarios
+from xpublish_opendap import OpenDapPlugin
 
 
 def load_dataset(name: str) -> tuple[xr.Dataset, str]:
@@ -53,25 +52,25 @@ def load_dataset(name: str) -> tuple[xr.Dataset, str]:
     Returns:
         Tuple of (dataset, dataset_id).
     """
-    if name == 'ifs':
+    if name == "ifs":
         try:
             from arraylake import Client
         except ImportError:
-            print('arraylake is required for --dataset ifs')
-            print('Install with: pip install arraylake')
+            print("arraylake is required for --dataset ifs")
+            print("Install with: pip install arraylake")
             sys.exit(1)
 
-        print('Loading IFS Realtime dataset from Arraylake...')
+        print("Loading IFS Realtime dataset from Arraylake...")
         client = Client()
-        repo = client.get_repo('earthmover-demos/ifs-demo')
-        session = repo.readonly_session(branch='main')
+        repo = client.get_repo("earthmover-demos/ifs-demo")
+        session = repo.readonly_session(branch="main")
         ds = xr.open_zarr(session.store, zarr_format=3)
-        return ds, 'ifs'
+        return ds, "ifs"
 
     # Default: air_temperature tutorial dataset
-    print('Loading air_temperature tutorial dataset...')
-    ds = xr.tutorial.open_dataset('air_temperature')
-    return ds, 'air'
+    print("Loading air_temperature tutorial dataset...")
+    ds = xr.tutorial.open_dataset("air_temperature")
+    return ds, "air"
 
 
 def start_server(
@@ -86,9 +85,9 @@ def start_server(
     """
     rest = xpublish.Rest(
         {dataset_id: ds},
-        plugins={'opendap': OpenDapPlugin()},
+        plugins={"opendap": OpenDapPlugin()},
     )
-    config = uvicorn.Config(rest.app, host=host, port=port, log_level='warning')
+    config = uvicorn.Config(rest.app, host=host, port=port, log_level="warning")
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
@@ -103,7 +102,7 @@ def check_port_free(host: str, port: int) -> None:
         try:
             s.bind((host, port))
         except OSError:
-            print(f'Port {port} is already in use. Use --port to pick another.')
+            print(f"Port {port} is already in use. Use --port to pick another.")
             sys.exit(1)
 
 
@@ -112,13 +111,13 @@ def wait_for_server(base_url: str, dataset_id: str, timeout: float = 30.0) -> No
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
-            resp = httpx.get(f'{base_url}/datasets', timeout=2.0)
+            resp = httpx.get(f"{base_url}/datasets", timeout=2.0)
             if resp.status_code == 200 and dataset_id in resp.text:
                 return
         except httpx.ConnectError:
             pass
         time.sleep(0.5)
-    print(f'Server did not start within {timeout}s')
+    print(f"Server did not start within {timeout}s")
     sys.exit(1)
 
 
@@ -132,7 +131,7 @@ def run_scenario(
     verbose: bool,
 ) -> ScenarioResult:
     """Run a single scenario: warmup then timed iterations."""
-    url = f'{base_url}{scenario.path}'
+    url = f"{base_url}{scenario.path}"
     result = ScenarioResult(
         name=scenario.name,
         category=scenario.category,
@@ -162,10 +161,19 @@ def run_scenario(
             # Validate response authenticity via DAP-specific header
             if status_code == 200 and scenario.expected_header:
                 if scenario.expected_header not in resp.headers:
-                    error = f'missing {scenario.expected_header} header (endpoint not implemented?)'
+                    error = f"missing {scenario.expected_header} header (endpoint not implemented?)"
+                    status_code = 0  # Mark as failure
+
+            # Validate response size — catches servers that ignore constraints
+            if status_code == 200 and scenario.expected_min_bytes > 0:
+                if response_bytes < scenario.expected_min_bytes:
+                    error = (
+                        f"response too small: {response_bytes} bytes < "
+                        f"{scenario.expected_min_bytes} expected (constraint not applied?)"
+                    )
                     status_code = 0  # Mark as failure
         except httpx.TimeoutException:
-            error = 'timeout'
+            error = "timeout"
         except Exception as e:
             error = str(e)
         t1 = time.perf_counter()
@@ -179,14 +187,16 @@ def run_scenario(
         result.requests.append(req)
 
         if verbose and (error or status_code != 200):
-            print(f'  [{scenario.name}] iter {i + 1}: status={status_code} error={error}')
+            print(
+                f"  [{scenario.name}] iter {i + 1}: status={status_code} error={error}",
+            )
 
     # Log first failure details on first occurrence (even without -v)
     first_fail = next((r for r in result.requests if not r.success), None)
     if first_fail and not verbose:
-        print(f' [!] status={first_fail.status_code}', end='')
+        print(f" [!] status={first_fail.status_code}", end="")
         if first_fail.error:
-            print(f' error={first_fail.error}', end='')
+            print(f" error={first_fail.error}", end="")
 
     return result
 
@@ -194,77 +204,81 @@ def run_scenario(
 def dataset_info(ds: xr.Dataset, dataset_id: str) -> dict:
     """Build dataset metadata for JSON output."""
     return {
-        'dataset_id': dataset_id,
-        'dims': {str(k): int(v) for k, v in ds.sizes.items()},
-        'data_vars': list(str(v) for v in ds.data_vars),
-        'coords': list(str(c) for c in ds.coords),
+        "dataset_id": dataset_id,
+        "dims": {str(k): int(v) for k, v in ds.sizes.items()},
+        "data_vars": list(str(v) for v in ds.data_vars),
+        "coords": list(str(c) for c in ds.coords),
     }
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description='Xpublish OpenDAP benchmark suite',
+        description="Xpublish OpenDAP benchmark suite",
     )
     parser.add_argument(
-        '-n', '--iterations',
+        "-n",
+        "--iterations",
         type=int,
         default=10,
-        help='Number of timed iterations per scenario (default: 10)',
+        help="Number of timed iterations per scenario (default: 10)",
     )
     parser.add_argument(
-        '--warmup',
+        "--warmup",
         type=int,
         default=2,
-        help='Number of warmup iterations per scenario (default: 2)',
+        help="Number of warmup iterations per scenario (default: 2)",
     )
     parser.add_argument(
-        '--port',
+        "--port",
         type=int,
         default=9876,
-        help='Server port (default: 9876)',
+        help="Server port (default: 9876)",
     )
     parser.add_argument(
-        '--host',
-        default='127.0.0.1',
-        help='Server host (default: 127.0.0.1)',
+        "--host",
+        default="127.0.0.1",
+        help="Server host (default: 127.0.0.1)",
     )
     parser.add_argument(
-        '-o', '--output',
-        help='JSON output path (default: benchmarks/results/<auto>.json)',
+        "-o",
+        "--output",
+        help="JSON output path (default: benchmarks/results/<auto>.json)",
     )
     parser.add_argument(
-        '--csv',
-        help='Also write summary CSV to this path',
+        "--csv",
+        help="Also write summary CSV to this path",
     )
     parser.add_argument(
-        '--no-save',
-        action='store_true',
-        help='Skip writing JSON results to disk',
+        "--no-save",
+        action="store_true",
+        help="Skip writing JSON results to disk",
     )
     parser.add_argument(
-        '-c', '--compare',
-        help='Compare against baseline JSON file',
+        "-c",
+        "--compare",
+        help="Compare against baseline JSON file",
     )
     parser.add_argument(
-        '--dataset',
-        choices=['ifs', 'air'],
-        default='ifs',
-        help='Dataset to benchmark (default: ifs)',
+        "--dataset",
+        choices=["ifs", "air"],
+        default="ifs",
+        help="Dataset to benchmark (default: ifs)",
     )
     parser.add_argument(
-        '--scenarios',
+        "--scenarios",
         help='Filter scenarios by name prefix (e.g. "dap4", "metadata")',
     )
     parser.add_argument(
-        '--timeout',
+        "--timeout",
         type=float,
         default=60.0,
-        help='Request timeout in seconds (default: 60)',
+        help="Request timeout in seconds (default: 60)",
     )
     parser.add_argument(
-        '-v', '--verbose',
-        action='store_true',
-        help='Print per-request errors',
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Print per-request errors",
     )
     return parser.parse_args(argv)
 
@@ -274,18 +288,18 @@ def main(argv: list[str] | None = None) -> None:
 
     # Load dataset
     ds, dataset_id = load_dataset(args.dataset)
-    print(f'Dataset: {dataset_id}')
-    print(f'  Dims: {dict(ds.sizes)}')
-    print(f'  Data vars: {list(ds.data_vars)}')
+    print(f"Dataset: {dataset_id}")
+    print(f"  Dims: {dict(ds.sizes)}")
+    print(f"  Data vars: {list(ds.data_vars)}")
     print()
 
     # Start server
-    base_url = f'http://{args.host}:{args.port}'
+    base_url = f"http://{args.host}:{args.port}"
     check_port_free(args.host, args.port)
-    print(f'Starting server on {base_url}...')
+    print(f"Starting server on {base_url}...")
     server = start_server(ds, dataset_id, args.host, args.port)
     wait_for_server(base_url, dataset_id)
-    print('Server ready.')
+    print("Server ready.")
     print()
 
     # Build scenarios
@@ -293,32 +307,41 @@ def main(argv: list[str] | None = None) -> None:
     if args.scenarios:
         prefix = args.scenarios.lower()
         scenarios = [s for s in scenarios if s.name.lower().startswith(prefix)]
-    print(f'Running {len(scenarios)} scenarios, {args.iterations} iterations each '
-          f'({args.warmup} warmup)')
+    print(
+        f"Running {len(scenarios)} scenarios, {args.iterations} iterations each "
+        f"({args.warmup} warmup)",
+    )
     print()
 
     # Run benchmarks
     results: list[ScenarioResult] = []
     with httpx.Client() as client:
         for i, scenario in enumerate(scenarios, 1):
-            print(f'  [{i}/{len(scenarios)}] {scenario.name}...', end='', flush=True)
+            print(f"  [{i}/{len(scenarios)}] {scenario.name}...", end="", flush=True)
             result = run_scenario(
-                client, base_url, scenario,
-                args.iterations, args.warmup, args.timeout, args.verbose,
+                client,
+                base_url,
+                scenario,
+                args.iterations,
+                args.warmup,
+                args.timeout,
+                args.verbose,
             )
             results.append(result)
             ok = sum(1 for r in result.requests if r.success)
             avg_bytes = result.total_bytes / max(len(result.successes), 1)
             if avg_bytes >= 1024 * 1024:
-                size_str = f'{avg_bytes / (1024 * 1024):.1f}MB'
+                size_str = f"{avg_bytes / (1024 * 1024):.1f}MB"
             elif avg_bytes >= 1024:
-                size_str = f'{avg_bytes / 1024:.1f}KB'
+                size_str = f"{avg_bytes / 1024:.1f}KB"
             else:
-                size_str = f'{avg_bytes:.0f}B'
+                size_str = f"{avg_bytes:.0f}B"
             if math.isnan(result.mean_latency):
-                print(f' N/A, {size_str} ({ok}/{len(result.requests)} ok)')
+                print(f" N/A, {size_str} ({ok}/{len(result.requests)} ok)")
             else:
-                print(f' {result.mean_latency * 1000:.1f}ms avg, {size_str} ({ok}/{len(result.requests)} ok)')
+                print(
+                    f" {result.mean_latency * 1000:.1f}ms avg, {size_str} ({ok}/{len(result.requests)} ok)",
+                )
 
     # Output
     print_table(results)
@@ -330,10 +353,10 @@ def main(argv: list[str] | None = None) -> None:
         write_json(results, Path(args.output), dataset_info=info)
     elif not args.no_save:
         # Auto-save to benchmarks/results/ unless --no-save
-        results_dir = Path(__file__).resolve().parent / 'results'
+        results_dir = Path(__file__).resolve().parent / "results"
         results_dir.mkdir(exist_ok=True)
-        ts = time.strftime('%Y%m%d-%H%M%S')
-        json_path = results_dir / f'{ts}_{dataset_id}.json'
+        ts = time.strftime("%Y%m%d-%H%M%S")
+        json_path = results_dir / f"{ts}_{dataset_id}.json"
         write_json(results, json_path, dataset_info=info)
 
     if args.csv:
@@ -344,8 +367,8 @@ def main(argv: list[str] | None = None) -> None:
 
     # Shutdown
     server.should_exit = True
-    print('Done.')
+    print("Done.")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

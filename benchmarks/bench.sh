@@ -92,7 +92,7 @@ run_bench() {
         local ds_output="${output_prefix}_${ds}.json"
         echo ""
         echo "  --- Dataset: $ds ---"
-        python "$PROJECT_DIR/benchmarks/run.py" \
+        python "$BENCH_RUNNER_DIR/benchmarks/run.py" \
             --dataset "$ds" \
             --port "$port" \
             -o "$ds_output" \
@@ -106,19 +106,30 @@ run_bench() {
 }
 
 # ──────────────────────────────────────────────────────────────────────
-# Setup
+# Setup — each invocation gets its own subdirectory under results/
 # ──────────────────────────────────────────────────────────────────────
 TS="$(date +%Y%m%d-%H%M%S)"
-RELEASE_PREFIX="$RESULTS_DIR/${TS}_release"
-DAP4_PREFIX="$RESULTS_DIR/${TS}_dap4"
+RUN_DIR="$RESULTS_DIR/$TS"
+mkdir -p "$RUN_DIR"
+RELEASE_PREFIX="$RUN_DIR/release"
+DAP4_PREFIX="$RUN_DIR/dap4"
 
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
+# Copy the benchmarks/ directory to a standalone temp location so that
+# run.py's sys.path hack (needed for `from benchmarks.xxx import`) does NOT
+# put the project root on sys.path — otherwise the local xpublish_opendap
+# source tree shadows whatever is installed in the venv, making both runs
+# use the same code.
+BENCH_RUNNER_DIR="$TMPDIR_BASE/runner"
+mkdir -p "$BENCH_RUNNER_DIR"
+cp -R "$SCRIPT_DIR" "$BENCH_RUNNER_DIR/benchmarks"
+
 echo "xpublish-opendap benchmark suite"
 echo "================================"
 echo "  Datasets: ${DATASETS[*]}"
-echo "  Results:  $RESULTS_DIR/"
+echo "  Results:  $RUN_DIR/"
 echo "  Temp:     $TMPDIR_BASE/"
 
 # ──────────────────────────────────────────────────────────────────────
@@ -131,13 +142,13 @@ run_bench "release" \
     "xpublish-opendap==0.2.0"
 
 # ──────────────────────────────────────────────────────────────────────
-# Run 2: feature/dap4 branch from GitHub (installed via git+https)
+# Run 2: local build of the dap4 branch (for active development)
 # ──────────────────────────────────────────────────────────────────────
 run_bench "dap4" \
     "$TMPDIR_BASE/venv-dap4" \
     "$PORT_DAP4" \
     "$DAP4_PREFIX" \
-    "xpublish-opendap @ git+https://github.com/xpublish-community/xpublish-opendap.git@feature/dap4"
+    "$PROJECT_DIR"
 
 # ──────────────────────────────────────────────────────────────────────
 # Compare results
@@ -154,7 +165,7 @@ for ds in "${DATASETS[@]}"; do
     if [[ -f "$release_file" && -f "$dap4_file" ]]; then
         echo ""
         echo "  === $ds dataset ==="
-        python "$PROJECT_DIR/benchmarks/compare.py" "$release_file" "$dap4_file"
+        python "$BENCH_RUNNER_DIR/benchmarks/compare.py" "$release_file" "$dap4_file"
     else
         echo "  Skipping $ds comparison (missing result files)"
     fi
@@ -162,7 +173,7 @@ done
 
 echo ""
 echo "Result files:"
-for f in "$RESULTS_DIR/${TS}_"*.json; do
+for f in "$RUN_DIR/"*.json; do
     [[ -f "$f" ]] && echo "  $f"
 done
 echo ""

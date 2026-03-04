@@ -29,36 +29,36 @@ from benchmarks.results import STAT_KEYS, BenchmarkRun, compare_runs, load_run
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description='Compare multiple xpublish benchmark runs',
+        description="Compare multiple xpublish benchmark runs",
     )
     parser.add_argument(
-        'files',
-        nargs='+',
-        help='JSON result files to compare (first is treated as baseline)',
+        "files",
+        nargs="+",
+        help="JSON result files to compare (first is treated as baseline)",
     )
     parser.add_argument(
-        '--metric',
-        default='mean_latency_s',
+        "--metric",
+        default="mean_latency_s",
         choices=STAT_KEYS,
-        help='Statistic to compare (default: mean_latency_s)',
+        help="Statistic to compare (default: mean_latency_s)",
     )
     parser.add_argument(
-        '--format',
-        dest='output_format',
-        default='table',
-        choices=['table', 'csv', 'json'],
-        help='Output format (default: table)',
+        "--format",
+        dest="output_format",
+        default="table",
+        choices=["table", "csv", "json"],
+        help="Output format (default: table)",
     )
     parser.add_argument(
-        '--scenarios',
-        help='Filter scenarios by name prefix',
+        "--scenarios",
+        help="Filter scenarios by name prefix",
     )
     parser.add_argument(
-        '--sort',
-        choices=['name', 'delta', 'value'],
-        default='name',
-        help='Sort scenarios: name (default), delta (%% change of last run vs baseline), '
-             'value (metric value in last run)',
+        "--sort",
+        choices=["name", "delta", "value"],
+        default="name",
+        help="Sort scenarios: name (default), delta (%% change of last run vs baseline), "
+        "value (metric value in last run)",
     )
     return parser.parse_args(argv)
 
@@ -67,7 +67,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
 
     if len(args.files) < 2:
-        print('Need at least 2 result files to compare.', file=sys.stderr)
+        print("Need at least 2 result files to compare.", file=sys.stderr)
         sys.exit(1)
 
     # Load runs
@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> None:
     for f in args.files:
         path = Path(f)
         if not path.exists():
-            print(f'File not found: {path}', file=sys.stderr)
+            print(f"File not found: {path}", file=sys.stderr)
             sys.exit(1)
         runs.append(load_run(path))
 
@@ -84,19 +84,19 @@ def main(argv: list[str] | None = None) -> None:
         prefix = args.scenarios.lower()
         for run in runs:
             to_remove = [
-                name for name in run.scenarios
-                if not name.lower().startswith(prefix)
+                name for name in run.scenarios if not name.lower().startswith(prefix)
             ]
             for name in to_remove:
                 del run.scenarios[name]
 
     # Sort scenarios if requested (applied by reordering the baseline's scenario dict)
-    if args.sort != 'name':
+    if args.sort != "name":
         baseline = runs[0]
         last_run = runs[-1]
         all_names = list(baseline.scenarios.keys())
 
-        if args.sort == 'delta':
+        if args.sort == "delta":
+
             def delta_key(name: str) -> float:
                 b = baseline.stat(name, args.metric)
                 c = last_run.stat(name, args.metric)
@@ -105,7 +105,8 @@ def main(argv: list[str] | None = None) -> None:
                 return ((c - b) / b) * 100
 
             all_names.sort(key=delta_key)
-        elif args.sort == 'value':
+        elif args.sort == "value":
+
             def value_key(name: str) -> float:
                 v = last_run.stat(name, args.metric)
                 return v if v is not None else 0.0
@@ -128,5 +129,5 @@ def main(argv: list[str] | None = None) -> None:
     print(output)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
