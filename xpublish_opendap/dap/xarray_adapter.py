@@ -41,9 +41,9 @@ def plan_subsetting(ds: xr.Dataset, constraint: Constraint) -> SubsettingPlan:
     """
     plan = SubsettingPlan()
 
-    all_var_names: set[str] = (
-        {str(n) for n in ds.data_vars} | {str(n) for n in ds.coords}
-    )
+    all_var_names: set[str] = {str(n) for n in ds.data_vars} | {
+        str(n) for n in ds.coords
+    }
 
     if not constraint.projections:
         # No projection = all variables
@@ -150,12 +150,12 @@ def _resolve_grid_path(name: str, ds: xr.Dataset, all_var_names: set[str]) -> st
     Raises:
         VariableNotFoundError: If the name cannot be resolved.
     """
-    if '.' not in name:
+    if "." not in name:
         if name not in all_var_names:
             raise VariableNotFoundError(name)
         return name
 
-    grid_name, member_name = name.split('.', 1)
+    grid_name, member_name = name.split(".", 1)
 
     # The grid must be a multi-dimensional data variable
     if grid_name not in ds.data_vars or ds[grid_name].ndim == 0:

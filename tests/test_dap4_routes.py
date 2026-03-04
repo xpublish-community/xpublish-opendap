@@ -212,8 +212,9 @@ class TestDAP4ErrorHandling:
         ds_big = xr.Dataset(
             {
                 "big": xr.DataArray(
-                    np.zeros((100, 100), dtype="float64"), dims=["y", "x"]
-                )
+                    np.zeros((100, 100), dtype="float64"),
+                    dims=["y", "x"],
+                ),
             },
             coords={
                 "y": np.arange(100, dtype="float64"),
@@ -271,8 +272,9 @@ class TestDAP4ErrorResponseBody:
         ds_big = xr.Dataset(
             {
                 "big": xr.DataArray(
-                    np.zeros((100, 100), dtype="float64"), dims=["y", "x"]
-                )
+                    np.zeros((100, 100), dtype="float64"),
+                    dims=["y", "x"],
+                ),
             },
             coords={
                 "y": np.arange(100, dtype="float64"),
@@ -385,7 +387,7 @@ class TestDAP4MultiVar:
 class TestDAP4Stride:
     def test_dap4_stride_response(self, client):
         resp = client.get(
-            "/datasets/test/opendap.dap?dap4.ce=/temp[0:2:2][0:1:3][0:1:4]"
+            "/datasets/test/opendap.dap?dap4.ce=/temp[0:2:2][0:1:3][0:1:4]",
         )
         assert resp.status_code == 200
         data = resp.content

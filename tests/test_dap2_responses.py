@@ -599,8 +599,9 @@ class TestBytesAndUnicode:
         ds = xr.Dataset(
             {
                 "bvar": xr.DataArray(
-                    np.array([b"hello", b"world"], dtype="S5"), dims=["x"]
-                )
+                    np.array([b"hello", b"world"], dtype="S5"),
+                    dims=["x"],
+                ),
             },
             coords={"x": np.arange(2, dtype="int32")},
         )
@@ -611,8 +612,9 @@ class TestBytesAndUnicode:
         ds = xr.Dataset(
             {
                 "uvar": xr.DataArray(
-                    np.array(["hello", "world"], dtype="U10"), dims=["x"]
-                )
+                    np.array(["hello", "world"], dtype="U10"),
+                    dims=["x"],
+                ),
             },
             coords={"x": np.arange(2, dtype="int32")},
         )

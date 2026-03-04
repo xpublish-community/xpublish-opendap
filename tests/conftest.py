@@ -54,13 +54,16 @@ def multi_type_ds():
     return xr.Dataset(
         {
             "i8_var": xr.DataArray(
-                np.array([[-1, 0], [1, 2]], dtype="int8"), dims=["y", "x"]
+                np.array([[-1, 0], [1, 2]], dtype="int8"),
+                dims=["y", "x"],
             ),
             "i16_var": xr.DataArray(
-                np.array([[100, -200], [300, -400]], dtype="int16"), dims=["y", "x"]
+                np.array([[100, -200], [300, -400]], dtype="int16"),
+                dims=["y", "x"],
             ),
             "u16_var": xr.DataArray(
-                np.array([[1000, 2000], [3000, 4000]], dtype="uint16"), dims=["y", "x"]
+                np.array([[1000, 2000], [3000, 4000]], dtype="uint16"),
+                dims=["y", "x"],
             ),
             "i32_var": xr.DataArray(
                 np.array([[100000, -100000], [200000, -200000]], dtype="int32"),
@@ -79,14 +82,16 @@ def multi_type_ds():
                 dims=["y", "x"],
             ),
             "bool_var": xr.DataArray(
-                np.array([[True, False], [False, True]]), dims=["y", "x"]
+                np.array([[True, False], [False, True]]),
+                dims=["y", "x"],
             ),
         },
         coords={
             "x": np.array([10, 20], dtype="int32"),
             "y": np.array([30, 40], dtype="int32"),
             "time_coord": xr.DataArray(
-                pd.date_range("2000-01-01", periods=2, freq="D"), dims=["y"]
+                pd.date_range("2000-01-01", periods=2, freq="D"),
+                dims=["y"],
             ),
         },
         attrs={

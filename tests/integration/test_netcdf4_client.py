@@ -61,7 +61,9 @@ class TestNetCDF4Client:
         """Latitude values match the reference dataset."""
         ds = _open(opendap_base)
         np.testing.assert_allclose(
-            ds.variables["lat"][:], reference_ds["lat"].values, rtol=1e-5
+            ds.variables["lat"][:],
+            reference_ds["lat"].values,
+            rtol=1e-5,
         )
         ds.close()
 

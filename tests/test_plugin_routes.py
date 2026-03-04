@@ -242,7 +242,7 @@ class TestStrideAndCoordRoutes:
 
     def test_dap4_with_stride(self, client):
         resp = client.get(
-            "/datasets/test/opendap.dap?dap4.ce=/temp[0:2:2][0:1:3][0:1:4]"
+            "/datasets/test/opendap.dap?dap4.ce=/temp[0:2:2][0:1:3][0:1:4]",
         )
         assert resp.status_code == 200
 
@@ -251,13 +251,13 @@ class TestConflictingSlicesRoute:
     def test_dods_conflicting_slices(self, client):
         # Same var projected twice with different slices — should succeed (last-wins)
         resp = client.get(
-            "/datasets/test/opendap.dods?temp[0:1][0:1][0:1],temp[0:0][0:0][0:0]"
+            "/datasets/test/opendap.dods?temp[0:1][0:1][0:1],temp[0:0][0:0][0:0]",
         )
         assert resp.status_code == 200
 
     def test_dap4_conflicting_slices(self, client):
         resp = client.get(
-            "/datasets/test/opendap.dap?dap4.ce=/temp[0:1][0:1][0:1];/temp[0:0][0:0][0:0]"
+            "/datasets/test/opendap.dap?dap4.ce=/temp[0:1][0:1][0:1];/temp[0:0][0:0][0:0]",
         )
         assert resp.status_code == 200
 

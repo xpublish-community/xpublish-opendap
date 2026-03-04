@@ -493,8 +493,9 @@ class TestBytesDTypeDAP4:
         ds = xr.Dataset(
             {
                 "bvar": xr.DataArray(
-                    np.array([b"hello", b"world"], dtype="S5"), dims=["x"]
-                )
+                    np.array([b"hello", b"world"], dtype="S5"),
+                    dims=["x"],
+                ),
             },
             coords={"x": np.array([0, 1], dtype="int32")},
         )

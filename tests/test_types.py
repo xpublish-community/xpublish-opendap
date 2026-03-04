@@ -203,7 +203,7 @@ class TestCfEncodeVariable:
         if encoded.dtype.kind == "i":
             # int64 encoding: NaT → fill_value (int64 min or similar)
             assert np.any(values == np.iinfo(np.int64).min) or np.any(
-                values == encoded.attrs.get("_FillValue", np.iinfo(np.int64).min)
+                values == encoded.attrs.get("_FillValue", np.iinfo(np.int64).min),
             )
         else:
             # float encoding: NaT → NaN

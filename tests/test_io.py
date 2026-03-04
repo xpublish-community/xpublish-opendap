@@ -49,7 +49,7 @@ class TestLoadDatasetAsync:
 
     async def test_preserves_encoding(self, tmp_path):
         ds = xr.Dataset(
-            {"temp": xr.DataArray(np.arange(10, dtype="float32"), dims=["x"])}
+            {"temp": xr.DataArray(np.arange(10, dtype="float32"), dims=["x"])},
         )
         ds["temp"].encoding = {"dtype": "int16", "scale_factor": 0.1}
         path = tmp_path / "test.nc"
@@ -65,8 +65,9 @@ class TestLoadDatasetAsync:
         ds = xr.Dataset(
             {
                 "val": xr.DataArray(
-                    np.array([1.0, 2.0, 3.0], dtype="float64"), dims=["x"]
-                )
+                    np.array([1.0, 2.0, 3.0], dtype="float64"),
+                    dims=["x"],
+                ),
             },
             coords={"x": np.arange(3, dtype="float64")},
         )
@@ -85,7 +86,7 @@ class TestLoadDatasetAsync:
 
     async def test_concurrent_loads(self, simple_ds):
         results = await asyncio.gather(
-            *(load_dataset_async(simple_ds) for _ in range(5))
+            *(load_dataset_async(simple_ds) for _ in range(5)),
         )
         assert len(results) == 5
         for r in results:

@@ -48,10 +48,14 @@ class TestNetCDF4Engine:
         """Coordinate arrays match the reference."""
         ds = xr.open_dataset(opendap_base, engine="netcdf4")
         np.testing.assert_allclose(
-            ds["lat"].values, reference_ds["lat"].values, rtol=1e-5
+            ds["lat"].values,
+            reference_ds["lat"].values,
+            rtol=1e-5,
         )
         np.testing.assert_allclose(
-            ds["lon"].values, reference_ds["lon"].values, rtol=1e-5
+            ds["lon"].values,
+            reference_ds["lon"].values,
+            rtol=1e-5,
         )
         ds.close()
 

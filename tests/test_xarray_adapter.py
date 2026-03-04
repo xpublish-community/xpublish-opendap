@@ -433,8 +433,9 @@ class TestEstimateMemoryEdgeCases:
         ds = xr.Dataset(
             {
                 "cvar": xr.DataArray(
-                    np.array([1 + 2j, 3 + 4j], dtype="complex128"), dims=["x"]
-                )
+                    np.array([1 + 2j, 3 + 4j], dtype="complex128"),
+                    dims=["x"],
+                ),
             },
             coords={"x": np.arange(2)},
         )
