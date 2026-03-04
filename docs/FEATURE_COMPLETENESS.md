@@ -39,7 +39,7 @@ Legend: implemented, partial, not implemented, n/a
 |--------|------|------|-------------------|
 | `XDODS-Server` | Required | -- | Implemented |
 | `XOPeNDAP-Server` | Required | Required | Implemented |
-| `XDAP` | `2.0` | `4.0` | Implemented (per-protocol) |
+| `XDAP` | `2.0` | `4.0` | Partial (DAP4 only: `XDAP: 4.0`; not set on DAP2 responses) |
 | `Content-Description` | Required | -- | Implemented (`dods-dds`, `dods-das`, `dods-data`, `dods-error`) |
 | `Content-Type` | Required | Required | Implemented (see table below) |
 | `Content-Encoding: deflate` | Optional | Optional | Not implemented |
@@ -225,7 +225,7 @@ Legend: implemented, partial, not implemented, n/a
 | No padding between elements | Required | Implemented |
 | Int16/UInt16 at natural 2-byte size | Required | Implemented |
 | Byte/Int8 at natural 1-byte size | Required | Implemented |
-| String: int64 len + UTF-8, no pad | Required | Implemented |
+| String: uint64 len + UTF-8, no pad | Required | Implemented |
 | CRC32 per top-level variable | Required | Implemented |
 | Opaque: int64 len + raw bytes | Required | N/A (no Opaque type) |
 | Structure: sequential fields, no pad | Required | N/A (no Structure support) |
@@ -295,7 +295,9 @@ Legend: implemented, partial, not implemented, n/a
 - **DAP2 int8**: Promoted to Int16 (correct per spec, but lossy)
 - **DAP2 int64/uint64**: Mapped to Float64 (correct per spec, but lossy for large values)
 - **DAP4 error elements**: `ErrorCode` and `Message` present; `Context` and `OtherInformation` omitted
+- **`XDAP` header**: Set on DAP4 responses (`4.0`) but not on DAP2 responses
 - **Response compression**: Not implemented (no `Content-Encoding: deflate`)
+- **`Last-Modified` header**: Not implemented (requires dataset timestamp metadata)
 
 ### Not Implemented
 
@@ -331,7 +333,10 @@ The implementation has been tested against:
 | NCO `ncks` | DAP2 | Integration tests pass |
 | `ncdump` | DAP2 | Integration tests pass |
 | Julia `NCDatasets.jl` | DAP2 | Integration tests exist |
+| R `ncdf4` package | DAP2 | Integration tests exist |
 | xarray `open_dataset(engine="pydap")` | DAP2 | Integration tests pass |
+| xarray `open_dataset(engine="netcdf4")` | DAP2 | Integration tests pass |
+| Raw HTTP (httpx) | DAP2 + DAP4 | Integration tests pass |
 | Generic DAP4 XML parsing | DAP4 | Unit tests pass |
 | DAP4 binary decoding | DAP4 | Unit tests pass |
 

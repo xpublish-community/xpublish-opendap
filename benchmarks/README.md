@@ -132,7 +132,7 @@ Available metrics: `mean_latency_s`, `median_latency_s`, `p95_latency_s`,
 
 ## Scenarios
 
-The suite generates ~21 scenarios organized into four categories:
+The suite generates ~16 scenarios organized into three categories:
 
 ### Metadata
 DDS, DAS, DMR, DSR, and version endpoints — measures metadata generation overhead without data I/O.
@@ -142,9 +142,6 @@ DODS requests with varying data volumes: scalar points, single/multi-timestep sl
 
 ### Data (DAP4)
 DAP4 binary data responses (`.dap`) with equivalent access patterns to the DAP2 scenarios.
-
-### Constraint Parsing
-DDS requests with increasingly complex constraint expressions — isolates the parsing/subsetting overhead from data serialization.
 
 ## Output Formats
 

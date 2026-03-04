@@ -1,5 +1,10 @@
 # Design: Lazy Loading and Streaming for Cloud-Backed Datasets
 
+> **Status:** Strategies 1 (variable pipelining) and 2 (slab streaming) are
+> implemented. A dask-graph encoding fast path (not originally discussed here)
+> was added post-design and provides the largest performance win. Strategy 3
+> (dask-native async) was evaluated and rejected.
+
 ## Context
 
 xpublish-opendap serves DAP2/DAP4 responses from xarray Datasets that may be
@@ -49,10 +54,10 @@ async generator iterates per-variable:
 - Coordinates are loaded once, cached for Grid Map re-emission
 - Per-variable granularity keeps peak memory bounded
 
-**Limitations:**
-- Each variable is fully materialized before any of its bytes are yielded
-- No pipelining: variable N+1 doesn't start loading until variable N is
-  fully encoded and yielded
+**Limitations addressed by the implementations below:**
+- ~~Each variable is fully materialized before any of its bytes are yielded~~
+  → Solved by slab streaming (Strategy 2) and dask-graph fast path
+- ~~No pipelining~~ → Slab streaming uses prefetch=1 for inter-slab pipelining
 - Backpressure from slow clients is implicit (generator blocks at yield)
   but doesn't propagate to dask — all chunks are fetched eagerly
 - The compute semaphore (8 slots shared across all requests) can become a
@@ -107,6 +112,11 @@ deviates from the spec.
 
 ### Strategy 1: Variable-Level Pipelining (low complexity, moderate benefit)
 
+> **Status:** Not implemented as a separate feature. The slab streaming
+> implementation (Strategy 2) provides intra-variable pipelining via
+> prefetch=1, which delivers a similar benefit for the common single-variable
+> request pattern.
+
 Pipeline the loading of variable N+1 while yielding variable N's bytes.
 
 ```python
@@ -152,7 +162,12 @@ variables in flight simultaneously).
 **When it helps:** Multi-variable requests, which are less common since most
 DAP clients request one variable at a time with a constraint expression.
 
-### Strategy 2: Chunk-Level Streaming (high complexity, high benefit)
+### Strategy 2: Slab Streaming (moderate complexity, high benefit) — IMPLEMENTED
+
+> **Status:** Implemented in `io.py` (`get_slab_boundaries`), `dods.py`
+> (`_load_and_encode_slab_xdr`), and `data.py` (`_load_and_encode_slab_dap4`).
+> Activates for dask-backed, non-string, non-datetime arrays above 32 MB with
+> multiple chunks along at least one dimension.
 
 Stream dask chunks individually within a variable, encoding each chunk's bytes
 as they arrive from storage.
@@ -283,7 +298,7 @@ This keeps `prefetch` slabs loading in parallel while the current slab is
 being sent to the client. With prefetch=2, at most 3 slabs are in memory
 (1 being sent, 2 loading).
 
-### Strategy 3: Dask-Native Async (aspirational)
+### Strategy 3: Dask-Native Async (evaluated, rejected)
 
 Use dask's async/distributed capabilities directly instead of wrapping
 synchronous loads in a thread pool.
@@ -380,45 +395,59 @@ pipelined via asyncio futures. This gives us two levels of parallelism:
 - Intra-slab: dask threads fetch chunks in parallel
 - Inter-slab: asyncio futures overlap loading of next slab with sending current
 
-## Recommendation
+## What Was Implemented
 
-### Near-term (low effort, high impact): Variable-level pipelining
+### Slab streaming (Strategy 2)
 
-Implement Strategy 1. This is a small change to `generate_dods` and
-`generate_dap4_data` that overlaps loading of the next variable with sending
-the current one. Benefits multi-variable requests with minimal complexity.
+Implemented in `io.py`, `dods.py`, and `data.py`. The implementation:
 
-### Medium-term (moderate effort, high impact for large requests): Slab streaming
+- **Detects slab eligibility** via `get_slab_boundaries()`: dask-backed,
+  non-string, non-datetime/timedelta (`M`/`m` excluded — CF encoding picks
+  data-dependent reference times per slab), multiple chunks along at least one
+  dimension, estimated size above `SLAB_THRESHOLD_BYTES` (32 MB).
+- **Chooses the dimension with the most dask chunks** (not necessarily the
+  outermost dimension) for maximum streaming granularity.
+- **Uses prefetch=1**: while the current slab is being sent, the next slab
+  is loading in the thread pool.
+- **For DAP4**, accumulates CRC32 incrementally across slabs using
+  `zlib.crc32`'s running checksum parameter.
 
-Implement Strategy 2 for the common case where the outermost dimension has
-multiple chunks. This is the biggest win for the IFS benchmark scenario
-(10-timestep requests go from blocking on all 210 chunks to streaming after
-the first 21).
+### Dask-graph encoding fast path (not in original design)
 
-Key implementation decisions:
-- Detect when slab streaming is possible (outermost dim is chunked, inner
-  dims are fully covered per chunk or contiguous)
-- Fall back to full-variable load when chunk layout is incompatible
-- Use a small prefetch buffer (1–2 slabs)
-- For DAP4, accumulate CRC32 incrementally across slabs using `zlib.crc32`'s
-  `value` parameter
+A significant additional optimization discovered during benchmarking. Instead
+of `load_variable()` → encode, the fast path fuses dtype conversion into the
+dask graph:
 
-### Long-term: Evaluate whether chunk-level streaming is worth the complexity
+```python
+flat = da.data.ravel()
+flat = flat.rechunk(~20MB)
+for block in flat.blocks:
+    parts.append(block.astype(wire_dtype).compute().tobytes())
+```
 
-For datasets with many small chunks along the outermost dimension (e.g.,
-hourly data with 1-hour chunks, requesting a year), slab streaming with
-prefetch already gets most of the benefit. True chunk-level streaming adds
-complexity for diminishing returns.
+This is ~37% faster than the eager load path for large arrays (benchmarked on
+IFS cloud data with 1740 chunks). The win comes from letting dask parallelize
+chunk fetches more effectively within each ~20MB block.
 
-The more impactful long-term investment is likely in caching (chunk-level
-LRU cache for repeated coordinate loads) and in connection pooling for the
-cloud storage client.
+Eligible when: dask-backed, ndim > 0, non-string (`U`/`S`/`O`), non-datetime
+(`M`/`m`). Implemented in `io.py` (`_is_dask_graph_eligible`,
+`dask_graph_encode_data_bytes`) and used by both slab and full-variable paths.
+
+### Future considerations
+
+- **Chunk-level streaming**: Slab streaming with the dask-graph fast path gets
+  most of the benefit. True per-chunk streaming adds complexity for diminishing
+  returns.
+- **Caching**: Chunk-level LRU cache for repeated coordinate loads.
+- **Connection pooling**: For cloud storage clients.
 
 ## Summary
 
-| Strategy | TTFB | Peak memory | Complexity | Best for |
+| Strategy | TTFB | Peak memory | Complexity | Status |
 |---|---|---|---|---|
-| Current (per-variable) | All chunks of var | 1 variable | Low | Single-variable requests |
-| Variable pipelining | All chunks of var | 2 variables | Low | Multi-variable requests |
-| Slab streaming | 1 slab of chunks | ~3 slabs | Moderate | Large time-series requests |
-| Chunk-level streaming | 1 chunk | ~3 chunks | High | Very large single variables |
+| Per-variable (eager) | All chunks of var | 1 variable | Low | Implemented (fallback path) |
+| Slab streaming + prefetch | 1 slab of chunks | ~2 slabs | Moderate | **Implemented** |
+| Dask-graph fast path | 1 block (~20MB) | ~20 MB | Low | **Implemented** |
+| Variable pipelining | All chunks of var | 2 variables | Low | Not implemented (slab streaming subsumes) |
+| Chunk-level streaming | 1 chunk | ~3 chunks | High | Not implemented (diminishing returns) |
+| Dask-native async | 1 chunk | ~3 chunks | High | Rejected (requires dask.distributed) |
