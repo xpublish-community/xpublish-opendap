@@ -9,6 +9,7 @@ Live tests are currently failing on Windows, see:
 import sys
 
 import netCDF4
+import numpy as np
 import pytest
 import xarray as xr
 
@@ -63,6 +64,28 @@ def test_attrs_quotes(xpublish_server):
     ds = xr.open_dataset(url)
 
     assert ds.attrs["quotes"] == 'This attribute uses "quotes"'
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="NetCDF4 is failing on Windows Github Actions workers",
+)
+def test_time_vars(xpublish_server):
+    """Datetime/timedelta data variables must be readable.
+
+    Regression test: datetime64/timedelta64 *data variables* (e.g. CF time
+    bounds) have no DAP dtype. Previously they were emitted as malformed String
+    arrays, corrupting the DODS stream so that every variable failed with
+    ``NetCDF: Index exceeds dimension bound``. They must now CF-encode to
+    numeric and read back as times.
+    """
+    url = f"{xpublish_server}/datasets/time_vars/opendap"
+    ds = xr.open_dataset(url)
+
+    # Reading any variable's values must not raise (the whole stream is sound).
+    assert ds["temp"].values.shape == (3, 4)
+    assert (ds["start_time"].values == np.datetime64("1965-01-01")).all()
+    assert (ds["duration"].values == np.timedelta64(365, "D")).all()
 
 
 @pytest.mark.skipif(
