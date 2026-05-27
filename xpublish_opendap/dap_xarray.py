@@ -67,13 +67,32 @@ def dap_attribute(key: str, value: Any) -> dap.Attribute:
     )
 
 
-def dap_dimension(da: xr.DataArray) -> dap.Array:
-    """Transform an xarray dimension into a DAP dimension."""
-    encoded_da: xr.Variable = xr.conventions.encode_cf_variable(da.variable)
+def _encode_cf(da: xr.DataArray | xr.Variable) -> xr.Variable:
+    """CF-encode a variable to its numeric on-disk representation.
+
+    DAP has no equivalent for ``datetime64``/``timedelta64`` dtypes. Without
+    encoding, :func:`dap_dtype` falls back to :class:`dap.String`, and
+    ``opendap_protocol`` then emits an invalid String-array encoding that
+    desynchronizes the entire DODS byte stream (clients report
+    ``NetCDF: Index exceeds dimension bound``). Encoding turns these into the
+    numeric CF form (e.g. ``float64`` with ``units``/``calendar`` attributes)
+    that serializes correctly and that clients decode back to times.
+
+    Laziness is preserved: encoding dask-backed data returns dask-backed data.
+    """
+    variable = da.variable if isinstance(da, xr.DataArray) else da
+    encoded: xr.Variable = xr.conventions.encode_cf_variable(variable)
 
     # protect against reverse encoding not matching to dap.DAPAtom dtypes
-    if str(encoded_da.dtype).startswith(">"):
-        encoded_da = encoded_da.astype(str(encoded_da.dtype).replace(">", "<"))
+    if str(encoded.dtype).startswith(">"):
+        encoded = encoded.astype(str(encoded.dtype).replace(">", "<"))
+
+    return encoded
+
+
+def dap_dimension(da: xr.DataArray) -> dap.Array:
+    """Transform an xarray dimension into a DAP dimension."""
+    encoded_da = _encode_cf(da)
 
     dim = dap.Array(
         name=da.name,
@@ -89,14 +108,22 @@ def dap_dimension(da: xr.DataArray) -> dap.Array:
 
 def dap_grid(da: xr.DataArray, dims: dict[str, dap.Array]) -> dap.Grid:
     """Transform an xarray DataArray into a DAP Grid."""
+    variable: xr.DataArray | xr.Variable = da
+    # datetime64 ("M") / timedelta64 ("m") data variables (e.g. CF time bounds)
+    # must be CF-encoded to numeric, the same way dimension coordinates are, or
+    # they fall through to the broken String fallback. Other dtypes are left
+    # untouched to preserve their existing on-the-wire representation.
+    if da.dtype.kind in ("M", "m"):
+        variable = _encode_cf(da)
+
     data_grid = dap.Grid(
         name=da.name,
-        data=da.data,
-        dtype=dap_dtype(da),
+        data=variable.data,
+        dtype=dap_dtype(variable),
         dimensions=[dims[dim] for dim in da.dims],
     )
 
-    for key, value in da.attrs.items():
+    for key, value in variable.attrs.items():
         data_grid.append(dap_attribute(key, value))
 
     return data_grid
