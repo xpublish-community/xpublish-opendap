@@ -121,6 +121,20 @@ class OpenDapPlugin(Plugin):  # type: ignore[misc]  # xpublish untyped
                 return Constraint()
             return parse_dap4_constraint(raw)
 
+        def _extract_dap4_checksums(request: Request) -> bool:
+            """Whether the client requested DAP4 checksums (dap4.checksum=true).
+
+            DAP4 checksums are negotiated per request: a client that wants a
+            CRC32 after each variable opts in with ``dap4.checksum=true`` and
+            then reads those 4 bytes. Without the parameter, no checksums are
+            sent (the libdap4 default). netcdf-c omits the parameter by default;
+            pydap sends ``dap4.checksum=true``. Emitting checksums a client did
+            not request misaligns its read of every subsequent variable.
+            """
+            params = parse_qs(request.url.query or "")
+            values = params.get("dap4.checksum", [])
+            return bool(values) and values[0].lower() == "true"
+
         @router.get(".dds")
         async def dds_response(
             request: Request,
@@ -234,7 +248,11 @@ class OpenDapPlugin(Plugin):  # type: ignore[misc]  # xpublish untyped
                 headers=_dap2_headers("dds"),
             )
 
+        # ``.dmr.xml`` is the suffix netcdf-c requests for the DMR (e.g. during
+        # a prefetch open); Hyrax serves it alongside ``.dmr``. Register both so
+        # netcdf-c clients can fetch metadata over DAP4.
         @router.get(".dmr")
+        @router.get(".dmr.xml")
         async def dmr_response(
             request: Request,
             dataset_id: str = "default",
@@ -288,6 +306,7 @@ class OpenDapPlugin(Plugin):  # type: ignore[misc]  # xpublish untyped
                         subsetted,
                         dataset_id,
                         dask_num_workers=config.dask_num_workers,
+                        use_checksums=_extract_dap4_checksums(request),
                     ),
                     media_type=DAP4_CONTENT_TYPES["dap"],
                     headers=_dap4_response_headers(),

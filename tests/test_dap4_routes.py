@@ -21,6 +21,20 @@ from xpublish_opendap.dap.dap4.dmr import DAP4_NS
 from xpublish_opendap.dap.dap4.headers import CONTENT_TYPES as DAP4_CONTENT_TYPES
 
 
+def _split_dmr_and_binary(data):
+    """Split a DAP4 data response into DMR text and the binary data portion.
+
+    The DMR is the leading chunk: a 4-byte header, the DMR XML, and a trailing
+    CRLF (inside the chunk). ``binary`` is everything after that first chunk.
+    """
+    raw = struct.unpack(">I", data[0:4])[0]
+    size = raw & CHUNK_SIZE_MASK
+    dmr_chunk = data[4 : 4 + size]
+    dmr = dmr_chunk[: -len(DMR_DATA_SEPARATOR)].decode("utf-8")
+    binary = data[4 + size :]
+    return dmr, binary
+
+
 @pytest.fixture(scope="module")
 def ds():
     """Dataset for route tests."""
@@ -55,6 +69,12 @@ class TestDMRRoute:
     def test_dmr_content_type(self, client):
         resp = client.get("/datasets/test/opendap.dmr")
         assert DAP4_CONTENT_TYPES["dmr"] in resp.headers["content-type"]
+
+    def test_dmr_xml_alias(self, client):
+        """netcdf-c requests the DMR at .dmr.xml; it must match .dmr."""
+        resp = client.get("/datasets/test/opendap.dmr.xml")
+        assert resp.status_code == 200
+        assert resp.text == client.get("/datasets/test/opendap.dmr").text
 
     def test_dmr_dap4_headers(self, client):
         resp = client.get("/datasets/test/opendap.dmr")
@@ -122,10 +142,8 @@ class TestDAPDataRoute:
         resp = client.get("/datasets/test/opendap.dap")
         data = resp.content
         assert DMR_DATA_SEPARATOR in data
-        idx = data.index(DMR_DATA_SEPARATOR)
-        dmr = data[:idx].decode("utf-8")
+        dmr, binary = _split_dmr_and_binary(data)
         assert "<Dataset" in dmr
-        binary = data[idx + len(DMR_DATA_SEPARATOR) :]
         assert len(binary) > 0
 
     def test_dap_ends_with_end_chunk(self, client):
@@ -138,12 +156,27 @@ class TestDAPDataRoute:
         chunk_type = raw & ~CHUNK_SIZE_MASK & ~0x04000000
         assert chunk_type == CHUNK_END
 
+    def test_dap_no_checksums_by_default(self, client):
+        """Without dap4.checksum=true, the x chunk holds only its data."""
+        resp = client.get("/datasets/test/opendap.dap?dap4.ce=/x")
+        _, binary = _split_dmr_and_binary(resp.content)
+        # x is 5 float32 = 20 bytes, no per-variable CRC32.
+        raw = struct.unpack(">I", binary[0:4])[0]
+        assert (raw & CHUNK_SIZE_MASK) == 20
+
+    def test_dap_checksums_when_requested(self, client):
+        """dap4.checksum=true appends a 4-byte CRC32 inside the variable chunk."""
+        resp = client.get("/datasets/test/opendap.dap?dap4.ce=/x&dap4.checksum=true")
+        _, binary = _split_dmr_and_binary(resp.content)
+        raw = struct.unpack(">I", binary[0:4])[0]
+        # x data (20) + CRC32 (4) inside the chunk payload.
+        assert (raw & CHUNK_SIZE_MASK) == 24
+
     def test_dap_with_constraint(self, client):
         resp = client.get("/datasets/test/opendap.dap?dap4.ce=/temp[0:0][0:0][0:0]")
         assert resp.status_code == 200
         data = resp.content
-        idx = data.index(DMR_DATA_SEPARATOR)
-        dmr = data[:idx].decode("utf-8")
+        dmr, _ = _split_dmr_and_binary(data)
         assert "temp" in dmr
 
     def test_dap_dap4_headers(self, client):
@@ -378,8 +411,7 @@ class TestDAP4MultiVar:
         resp = client.get("/datasets/test/opendap.dap?dap4.ce=/temp;/time")
         assert resp.status_code == 200
         data = resp.content
-        idx = data.index(DMR_DATA_SEPARATOR)
-        dmr = data[:idx].decode("utf-8")
+        dmr, _ = _split_dmr_and_binary(data)
         assert "temp" in dmr
         assert "time" in dmr
 
@@ -391,8 +423,7 @@ class TestDAP4Stride:
         )
         assert resp.status_code == 200
         data = resp.content
-        idx = data.index(DMR_DATA_SEPARATOR)
-        dmr = data[:idx].decode("utf-8")
+        dmr, _ = _split_dmr_and_binary(data)
         root = ET.fromstring(dmr)
         # Dimensions should reflect stride subsetting
         dims = root.findall(f"{{{DAP4_NS}}}Dimension")

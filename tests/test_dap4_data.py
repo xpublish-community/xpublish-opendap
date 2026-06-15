@@ -21,19 +21,25 @@ from xpublish_opendap.dap.dap4.data import (
 )
 
 
-async def _collect_dap4(ds, name="test"):
+async def _collect_dap4(ds, name="test", *, use_checksums=False):
     """Collect all bytes from generate_dap4_data."""
     chunks = []
-    async for chunk in generate_dap4_data(ds, name):
+    async for chunk in generate_dap4_data(ds, name, use_checksums=use_checksums):
         chunks.append(chunk)
     return b"".join(chunks)
 
 
 def _split_dmr_and_binary(data):
-    """Split DAP4 response into DMR text and binary portion."""
-    idx = data.index(DMR_DATA_SEPARATOR)
-    dmr = data[:idx].decode("utf-8")
-    binary = data[idx + len(DMR_DATA_SEPARATOR) :]
+    """Split DAP4 response into DMR text and binary portion.
+
+    The DMR is the leading CHUNK_DATA chunk: a 4-byte header, the DMR XML, and a
+    trailing CRLF (all inside the chunk). ``binary`` is everything after that
+    first chunk — the per-variable data chunks.
+    """
+    _type_flags, size, body = _read_chunk_header(data, 0)
+    dmr_chunk = data[body : body + size]
+    dmr = dmr_chunk[: -len(DMR_DATA_SEPARATOR)].decode("utf-8")
+    binary = data[body + size :]
     return dmr, binary
 
 
@@ -96,8 +102,9 @@ class TestChunkHeaders:
         raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
 
-        # x coord: uint64 length prefix (8) + 2 * 4 bytes float32 = 16
-        assert size == 16
+        # DAP4 has no array-length prefix: 2 * 4 bytes float32 = 8 (no checksum
+        # requested, so no trailing CRC32 either).
+        assert size == 8
 
 
 class TestFloat32Encoding:
@@ -112,12 +119,9 @@ class TestFloat32Encoding:
         size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[4 : 4 + size]
 
-        # uint64 length prefix
-        n = struct.unpack("<Q", chunk_data[0:8])[0]
-        assert n == 3
-
-        # 3 float32 in native byte order
-        values = np.frombuffer(chunk_data[8:20], dtype=np.float32)
+        # No length prefix: 3 float32 in native byte order, nothing else
+        assert size == 12
+        values = np.frombuffer(chunk_data, dtype=np.float32)
         np.testing.assert_array_equal(values, [1.0, 2.0, 3.0])
 
 
@@ -132,10 +136,8 @@ class TestFloat64Encoding:
         size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[4 : 4 + size]
 
-        n = struct.unpack("<Q", chunk_data[0:8])[0]
-        assert n == 2
-
-        values = np.frombuffer(chunk_data[8:24], dtype=np.float64)
+        assert size == 16
+        values = np.frombuffer(chunk_data, dtype=np.float64)
         np.testing.assert_array_equal(values, [10.0, 20.0])
 
 
@@ -150,14 +152,11 @@ class TestInt16Encoding:
         raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
 
-        # uint64 (8) + 2 * 2 bytes = 12 (not 8+8=16 as in XDR)
-        assert size == 12
+        # 2 * 2 bytes = 4 (natural size, no prefix, no widening to 4 like XDR)
+        assert size == 4
 
         chunk_data = binary[4 : 4 + size]
-        n = struct.unpack("<Q", chunk_data[0:8])[0]
-        assert n == 2
-
-        values = np.frombuffer(chunk_data[8:12], dtype=np.int16)
+        values = np.frombuffer(chunk_data, dtype=np.int16)
         np.testing.assert_array_equal(values, [100, 200])
 
 
@@ -172,8 +171,8 @@ class TestByteEncoding:
         raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
 
-        # uint64 (8) + 3 bytes = 11 (no padding to 4-byte boundary)
-        assert size == 11
+        # 3 bytes = 3 (no length prefix, no padding to 4-byte boundary)
+        assert size == 3
 
 
 class TestInt64Encoding:
@@ -187,10 +186,8 @@ class TestInt64Encoding:
         size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[4 : 4 + size]
 
-        n = struct.unpack("<Q", chunk_data[0:8])[0]
-        assert n == 2
-
-        values = np.frombuffer(chunk_data[8:24], dtype=np.int64)
+        assert size == 16
+        values = np.frombuffer(chunk_data, dtype=np.int64)
         np.testing.assert_array_equal(values, [1000000000000, -1])
 
 
@@ -204,24 +201,22 @@ class TestStringEncoding:
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
 
-        # Skip coordinate chunk (x: int32, 2 elements) + CRC
-        # x chunk: header(4) + uint64(8) + 2*4 bytes(8) = 20 + CRC(4) = 24
+        # Skip coordinate chunk (x: int32, 2 elements). No prefix, no checksum:
+        # x chunk = header(4) + 2*4 bytes(8).
         offset = 0
         raw = struct.unpack(">I", binary[offset : offset + 4])[0]
         x_size = raw & CHUNK_SIZE_MASK
-        offset += 4 + x_size + 4  # header + data + CRC
+        assert x_size == 8
+        offset += 4 + x_size  # header + data
 
         # String var chunk
         raw = struct.unpack(">I", binary[offset : offset + 4])[0]
         s_size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[offset + 4 : offset + 4 + s_size]
 
-        # Array length
-        n = struct.unpack("<Q", chunk_data[0:8])[0]
-        assert n == 2
-
+        # No array-level count prefix; each string is uint64 length + UTF-8.
         # First string: "hello"
-        pos = 8
+        pos = 0
         str_len = struct.unpack("<Q", chunk_data[pos : pos + 8])[0]
         assert str_len == 5
         assert chunk_data[pos + 8 : pos + 8 + 5] == b"hello"
@@ -234,57 +229,70 @@ class TestStringEncoding:
 
 
 class TestCRC32:
+    """CRC32 checksums are emitted only when the client requests them.
+
+    A DAP4 client opts in with ``dap4.checksum=true``; the server then appends a
+    4-byte CRC32 (over the variable's data) inside the variable's chunk payload.
+    """
+
     @pytest.mark.asyncio
-    async def test_crc32_after_data_chunk(self):
+    async def test_crc32_in_data_chunk(self):
         ds = xr.Dataset(coords={"x": np.array([1.0, 2.0], dtype="float32")})
-        data = await _collect_dap4(ds)
+        data = await _collect_dap4(ds, use_checksums=True)
         _, binary = _split_dmr_and_binary(data)
 
-        # Read first data chunk
+        # The chunk payload is [data || CRC32]; size covers both.
         raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[4 : 4 + size]
 
-        # CRC32 follows immediately after the chunk data
-        crc_bytes = binary[4 + size : 4 + size + 4]
-        crc_received = struct.unpack("<I", crc_bytes)[0]
+        var_data = chunk_data[:-4]
+        crc_received = struct.unpack("<I", chunk_data[-4:])[0]
+        assert var_data == np.array([1.0, 2.0], dtype="<f4").tobytes()
+        assert crc_received == zlib.crc32(var_data) & 0xFFFFFFFF
 
-        # Compute expected CRC32
-        crc_expected = zlib.crc32(chunk_data) & 0xFFFFFFFF
-        assert crc_received == crc_expected
+    @pytest.mark.asyncio
+    async def test_no_crc32_by_default(self):
+        """Without dap4.checksum=true the chunk holds only the data."""
+        ds = xr.Dataset(coords={"x": np.array([1.0, 2.0], dtype="float32")})
+        data = await _collect_dap4(ds)
+        _, binary = _split_dmr_and_binary(data)
+
+        raw = struct.unpack(">I", binary[0:4])[0]
+        size = raw & CHUNK_SIZE_MASK
+        # 2 float32 only — no trailing 4-byte CRC32.
+        assert size == 8
 
     @pytest.mark.asyncio
     async def test_crc32_per_variable(self):
-        """Each variable should have its own CRC32."""
+        """Each variable carries its own CRC32 when checksums are requested."""
         ds = xr.Dataset(
             {"var": xr.DataArray(np.array([1.0, 2.0], dtype="float64"), dims=["x"])},
             coords={"x": np.array([0.0, 1.0], dtype="float64")},
         )
-        data = await _collect_dap4(ds)
+        data = await _collect_dap4(ds, use_checksums=True)
         _, binary = _split_dmr_and_binary(data)
 
-        # Read coord chunk + CRC
+        # Read coord chunk; CRC is the last 4 bytes of the chunk payload.
         raw = struct.unpack(">I", binary[0:4])[0]
         size1 = raw & CHUNK_SIZE_MASK
-        coord_data = binary[4 : 4 + size1]
-        crc1 = struct.unpack("<I", binary[4 + size1 : 4 + size1 + 4])[0]
-        assert crc1 == zlib.crc32(coord_data) & 0xFFFFFFFF
+        coord_chunk = binary[4 : 4 + size1]
+        crc1 = struct.unpack("<I", coord_chunk[-4:])[0]
+        assert crc1 == zlib.crc32(coord_chunk[:-4]) & 0xFFFFFFFF
 
-        # Read var chunk + CRC
-        offset = 4 + size1 + 4
+        # Read var chunk; its CRC is independent of the coord's.
+        offset = 4 + size1
         raw = struct.unpack(">I", binary[offset : offset + 4])[0]
         size2 = raw & CHUNK_SIZE_MASK
-        var_data = binary[offset + 4 : offset + 4 + size2]
-        crc2 = struct.unpack("<I", binary[offset + 4 + size2 : offset + 4 + size2 + 4])[
-            0
-        ]
-        assert crc2 == zlib.crc32(var_data) & 0xFFFFFFFF
+        var_chunk = binary[offset + 4 : offset + 4 + size2]
+        crc2 = struct.unpack("<I", var_chunk[-4:])[0]
+        assert crc2 == zlib.crc32(var_chunk[:-4]) & 0xFFFFFFFF
 
 
-class TestLengthPrefix:
+class TestNoLengthPrefix:
     @pytest.mark.asyncio
-    async def test_uint64_length_prefix(self):
-        """DAP4 uses uint64 length prefix sent once (not doubled like DAP2)."""
+    async def test_no_array_length_prefix(self):
+        """DAP4 fixed arrays carry no count prefix — the count is in the DMR."""
         ds = xr.Dataset(coords={"x": np.array([1.0, 2.0, 3.0], dtype="float32")})
         data = await _collect_dap4(ds)
         _, binary = _split_dmr_and_binary(data)
@@ -293,12 +301,9 @@ class TestLengthPrefix:
         size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[4 : 4 + size]
 
-        # Length prefix is 8-byte uint64
-        n = struct.unpack("<Q", chunk_data[0:8])[0]
-        assert n == 3
-
-        # The next 8 bytes should be float32 data, NOT another length prefix
-        values = np.frombuffer(chunk_data[8:20], dtype=np.float32)
+        # The chunk is exactly the raw element bytes — no 8-byte uint64 prefix.
+        assert size == 12
+        values = np.frombuffer(chunk_data, dtype=np.float32)
         np.testing.assert_array_equal(values, [1.0, 2.0, 3.0])
 
 
@@ -313,13 +318,9 @@ class TestInt32Encoding:
         size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[4 : 4 + size]
 
-        # uint64 length prefix (8) + 2 * 4 bytes = 16
-        assert size == 16
-
-        n = struct.unpack("<Q", chunk_data[0:8])[0]
-        assert n == 2
-
-        values = np.frombuffer(chunk_data[8:16], dtype=np.int32)
+        # 2 * 4 bytes = 8, no length prefix
+        assert size == 8
+        values = np.frombuffer(chunk_data, dtype=np.int32)
         np.testing.assert_array_equal(values, [100000, -100000])
 
 
@@ -334,12 +335,8 @@ class TestUInt32Encoding:
         size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[4 : 4 + size]
 
-        assert size == 16
-
-        n = struct.unpack("<Q", chunk_data[0:8])[0]
-        assert n == 2
-
-        values = np.frombuffer(chunk_data[8:16], dtype=np.uint32)
+        assert size == 8
+        values = np.frombuffer(chunk_data, dtype=np.uint32)
         np.testing.assert_array_equal(values, [3_000_000_000, 1])
 
 
@@ -354,14 +351,11 @@ class TestInt8Encoding:
         raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
 
-        # uint64 (8) + 3 * 1 byte = 11
-        assert size == 11
+        # 3 * 1 byte = 3, no length prefix
+        assert size == 3
 
         chunk_data = binary[4 : 4 + size]
-        n = struct.unpack("<Q", chunk_data[0:8])[0]
-        assert n == 3
-
-        values = np.frombuffer(chunk_data[8:11], dtype=np.int8)
+        values = np.frombuffer(chunk_data, dtype=np.int8)
         np.testing.assert_array_equal(values, [-1, 0, 1])
 
 
@@ -376,14 +370,11 @@ class TestUInt16Encoding:
         raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
 
-        # uint64 (8) + 2 * 2 bytes = 12
-        assert size == 12
+        # 2 * 2 bytes = 4, no length prefix
+        assert size == 4
 
         chunk_data = binary[4 : 4 + size]
-        n = struct.unpack("<Q", chunk_data[0:8])[0]
-        assert n == 2
-
-        values = np.frombuffer(chunk_data[8:12], dtype=np.uint16)
+        values = np.frombuffer(chunk_data, dtype=np.uint16)
         np.testing.assert_array_equal(values, [1000, 2000])
 
 
@@ -398,11 +389,11 @@ class TestBoolEncoding:
         raw = struct.unpack(">I", binary[0:4])[0]
         size = raw & CHUNK_SIZE_MASK
 
-        # uint64 (8) + 3 * 1 byte = 11 (no padding)
-        assert size == 11
+        # 3 * 1 byte = 3 (no length prefix, no padding)
+        assert size == 3
 
         chunk_data = binary[4 : 4 + size]
-        values = np.frombuffer(chunk_data[8:11], dtype=np.uint8)
+        values = np.frombuffer(chunk_data, dtype=np.uint8)
         np.testing.assert_array_equal(values, [1, 0, 1])
 
 
@@ -419,10 +410,8 @@ class TestUInt64MaxEncoding:
         size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[4 : 4 + size]
 
-        n = struct.unpack("<Q", chunk_data[0:8])[0]
-        assert n == 2
-
-        values = np.frombuffer(chunk_data[8:24], dtype=np.uint64)
+        assert size == 16
+        values = np.frombuffer(chunk_data, dtype=np.uint64)
         assert values[0] == np.iinfo(np.uint64).max
         assert values[1] == 0
 
@@ -438,10 +427,9 @@ class TestScalarEncoding:
         size = raw & CHUNK_SIZE_MASK
         chunk_data = binary[4 : 4 + size]
 
-        n = struct.unpack("<Q", chunk_data[0:8])[0]
-        assert n == 1
-
-        value = struct.unpack("<d", chunk_data[8:16])[0]
+        # Scalar → single element, no length prefix
+        assert size == 8
+        value = struct.unpack("<d", chunk_data[0:8])[0]
         assert value == 42.0
 
 
@@ -532,3 +520,108 @@ class TestEmptyArrayDAP4:
         )
         data = await _collect_dap4(ds)
         assert DMR_DATA_SEPARATOR in data
+
+
+class TestDMRChunkFraming:
+    """The DMR must be framed as the leading chunk of the chunked stream.
+
+    Regression test for the DAP4 prefetch failure: a conforming client
+    (netcdf-c, pydap) reads the whole ``.dap`` body as a chunked stream and
+    expects the DMR to be the first CHUNK_DATA chunk (4-byte header + DMR XML +
+    CRLF). Emitting the DMR as raw bytes with no chunk header corrupts the
+    stream — the client reads ``<?xm`` as a bogus chunk header and fails to
+    locate the data boundary.
+    """
+
+    @pytest.mark.asyncio
+    async def test_response_starts_with_dmr_chunk_header(self):
+        ds = xr.Dataset(coords={"x": np.array([1.0, 2.0], dtype="float32")})
+        data = await _collect_dap4(ds)
+
+        # The body must NOT start with the raw XML declaration — it must start
+        # with a 4-byte chunk header.
+        assert data[:5] != b"<?xml"
+
+        chunk_type, size, body = _read_chunk_header(data, 0)
+        assert chunk_type == CHUNK_DATA
+        if sys.byteorder == "little":
+            raw = struct.unpack(">I", data[0:4])[0]
+            assert raw & CHUNK_LITTLE_ENDIAN == CHUNK_LITTLE_ENDIAN
+
+        # Chunk size covers the DMR XML plus the trailing CRLF.
+        dmr_chunk = data[body : body + size]
+        assert dmr_chunk.endswith(DMR_DATA_SEPARATOR)
+        dmr_text = dmr_chunk[: -len(DMR_DATA_SEPARATOR)].decode("utf-8")
+        assert dmr_text.startswith("<?xml")
+        assert "<Dataset" in dmr_text
+
+    def _make_multivar_ds(self):
+        rng = np.arange(2 * 3, dtype="float32").reshape(2, 3)
+        return xr.Dataset(
+            {
+                "temp": xr.DataArray(rng, dims=["y", "x"]),
+                "flag": xr.DataArray(np.array([1, 0], dtype="int16"), dims=["y"]),
+            },
+            coords={
+                "y": np.array([0.0, 1.0], dtype="float64"),
+                "x": np.array([10.0, 20.0, 30.0], dtype="float32"),
+            },
+        )
+
+    @pytest.mark.asyncio
+    async def test_multi_variable_stream_dechunks(self):
+        """Simulate a prefetching client reading a multi-variable .dap stream.
+
+        Walk the chunked stream the way netcdf-c does with checksums OFF (the
+        default): the DMR chunk, then one data chunk per variable, then the
+        CHUNK_END marker — no interior CRC32 trailers to trip over.
+        """
+        ds = self._make_multivar_ds()
+        data = await _collect_dap4(ds)
+
+        # 1. DMR chunk
+        chunk_type, size, offset = _read_chunk_header(data, 0)
+        assert chunk_type == CHUNK_DATA
+        dmr = data[offset : offset + size]
+        assert dmr.endswith(DMR_DATA_SEPARATOR)
+        ET.fromstring(dmr[: -len(DMR_DATA_SEPARATOR)].decode("utf-8"))
+        offset += size
+
+        # 2. One CHUNK_DATA chunk per coord + data var, back to back.
+        n_vars = len(ds.coords) + len(ds.data_vars)
+        for _ in range(n_vars):
+            chunk_type, size, offset = _read_chunk_header(data, offset)
+            assert chunk_type == CHUNK_DATA
+            offset += size
+
+        # 3. End chunk closes the stream with no trailing bytes.
+        raw = struct.unpack(">I", data[offset : offset + 4])[0]
+        chunk_type = raw & ~CHUNK_SIZE_MASK & ~CHUNK_LITTLE_ENDIAN
+        size = raw & CHUNK_SIZE_MASK
+        assert chunk_type == CHUNK_END
+        assert size == 0
+        assert offset + 4 == len(data)
+
+    @pytest.mark.asyncio
+    async def test_multi_variable_stream_dechunks_with_checksums(self):
+        """With dap4.checksum=true each variable chunk ends in its own CRC32."""
+        ds = self._make_multivar_ds()
+        data = await _collect_dap4(ds, use_checksums=True)
+
+        chunk_type, size, offset = _read_chunk_header(data, 0)
+        offset += size  # skip DMR chunk
+
+        n_vars = len(ds.coords) + len(ds.data_vars)
+        for _ in range(n_vars):
+            chunk_type, size, offset = _read_chunk_header(data, offset)
+            assert chunk_type == CHUNK_DATA
+            payload = data[offset : offset + size]
+            offset += size
+            # The CRC32 is the last 4 bytes of the chunk payload and covers the
+            # variable data that precedes it.
+            crc = struct.unpack("<I", payload[-4:])[0]
+            assert crc == zlib.crc32(payload[:-4]) & 0xFFFFFFFF
+
+        raw = struct.unpack(">I", data[offset : offset + 4])[0]
+        assert (raw & ~CHUNK_SIZE_MASK & ~CHUNK_LITTLE_ENDIAN) == CHUNK_END
+        assert offset + 4 == len(data)

@@ -12,6 +12,8 @@ import xarray as xr
 
 from xpublish_opendap.dap.dap2.dods import DATA_SEPARATOR, generate_dods
 from xpublish_opendap.dap.dap4.data import (
+    CHUNK_END,
+    CHUNK_LITTLE_ENDIAN,
     CHUNK_SIZE_MASK,
     DMR_DATA_SEPARATOR,
     generate_dap4_data,
@@ -19,9 +21,6 @@ from xpublish_opendap.dap.dap4.data import (
 from xpublish_opendap.io import _is_dask_graph_eligible, get_slab_boundaries
 
 pytest_plugins: list[str] = []
-
-# Known chunk type top-byte values in DAP4 transport
-_DAP4_CHUNK_TYPE_BYTES = frozenset({0x00, 0x01, 0x02, 0x04, 0x05, 0x06})
 
 
 async def _collect(aiter):
@@ -32,49 +31,34 @@ async def _collect(aiter):
     return b"".join(parts)
 
 
-def _parse_dap4_variables(raw: bytes) -> tuple[bytes, list[tuple[bytes, int]]]:
-    """Parse a DAP4 response into DMR text and per-variable (payload, crc) pairs.
+def _parse_dap4_payload(raw: bytes) -> tuple[bytes, bytes]:
+    """Parse a DAP4 response into the DMR bytes and the concatenated data payload.
 
-    Strips transport chunk headers so responses with different chunk boundaries
-    can be compared by logical content.
-
-    The parser reads transport DATA chunks and accumulates their payloads.
-    When it encounters 4 bytes whose top byte does NOT match any known chunk type,
-    those bytes are interpreted as a CRC32, marking the end of a variable.
+    Walks the chunked transport: the leading DMR chunk, then every CHUNK_DATA
+    payload concatenated, up to CHUNK_END. Transport chunk boundaries differ
+    between slab-streamed and eager responses (slab emits several chunks per
+    variable), so stripping them lets the data be compared by logical content.
 
     Returns:
-        (dmr_bytes, [(variable_payload_bytes, crc32_value), ...])
+        (dmr_chunk_bytes, concatenated_data_payload_bytes)
     """
-    sep_idx = raw.index(DMR_DATA_SEPARATOR)
-    dmr = raw[:sep_idx]
-    binary = raw[sep_idx + len(DMR_DATA_SEPARATOR) :]
+    val = struct.unpack(">I", raw[0:4])[0]
+    dmr_size = val & CHUNK_SIZE_MASK
+    dmr = raw[4 : 4 + dmr_size]
+    offset = 4 + dmr_size
 
-    variables: list[tuple[bytes, int]] = []
-    offset = 0
-    current_data = b""
-
-    while offset + 4 <= len(binary):
-        val = struct.unpack(">I", binary[offset : offset + 4])[0]
-        top_byte = (val >> 24) & 0xFF
-
-        if top_byte not in _DAP4_CHUNK_TYPE_BYTES:
-            # Not a chunk header — this is a CRC32 (little-endian)
-            crc = struct.unpack("<I", binary[offset : offset + 4])[0]
-            variables.append((current_data, crc))
-            current_data = b""
-            offset += 4
-            continue
-
-        if top_byte in (0x01, 0x05):  # CHUNK_END
-            break
-
-        # DATA chunk: skip 4-byte header, read payload
-        chunk_size = val & CHUNK_SIZE_MASK
+    payload = b""
+    while offset + 4 <= len(raw):
+        val = struct.unpack(">I", raw[offset : offset + 4])[0]
+        chunk_type = val & ~CHUNK_SIZE_MASK & ~CHUNK_LITTLE_ENDIAN
+        size = val & CHUNK_SIZE_MASK
         offset += 4
-        current_data += binary[offset : offset + chunk_size]
-        offset += chunk_size
+        if chunk_type == CHUNK_END:
+            break
+        payload += raw[offset : offset + size]
+        offset += size
 
-    return dmr, variables
+    return dmr, payload
 
 
 def _make_dataset(dtype="float64", time_chunks=3, time_size=3, y_size=4, x_size=5):
@@ -238,23 +222,26 @@ class TestDodsSlabStreaming:
 
 class TestDap4SlabStreaming:
     async def test_dap4_slab_payload_matches_eager(self):
-        """Slab-streamed DAP4 has identical DMR, variable payloads, and CRCs."""
+        """Slab-streamed DAP4 has identical DMR and data payload (incl. checksums)."""
         ds_dask = _make_dataset(dtype="float64", time_chunks=1, time_size=3)
         ds_numpy = ds_dask.compute()
 
         slab_raw = await _collect(
-            generate_dap4_data(ds_dask, "test", slab_threshold_bytes=0),
+            generate_dap4_data(
+                ds_dask, "test", slab_threshold_bytes=0, use_checksums=True
+            ),
         )
-        eager_raw = await _collect(generate_dap4_data(ds_numpy, "test"))
+        eager_raw = await _collect(
+            generate_dap4_data(ds_numpy, "test", use_checksums=True),
+        )
 
-        slab_dmr, slab_vars = _parse_dap4_variables(slab_raw)
-        eager_dmr, eager_vars = _parse_dap4_variables(eager_raw)
+        slab_dmr, slab_payload = _parse_dap4_payload(slab_raw)
+        eager_dmr, eager_payload = _parse_dap4_payload(eager_raw)
 
         assert slab_dmr == eager_dmr
-        assert len(slab_vars) == len(eager_vars)
-        for (s_data, s_crc), (e_data, e_crc) in zip(slab_vars, eager_vars):
-            assert s_data == e_data, "Variable payload mismatch"
-            assert s_crc == e_crc, "CRC mismatch"
+        # Equal payloads (data + per-variable CRC32) confirm the slab path's
+        # incremental checksum matches the eager whole-variable checksum.
+        assert slab_payload == eager_payload
 
     async def test_dap4_slab_int32(self):
         """Integer data type produces identical DAP4 payloads."""
@@ -262,18 +249,19 @@ class TestDap4SlabStreaming:
         ds_numpy = ds_dask.compute()
 
         slab_raw = await _collect(
-            generate_dap4_data(ds_dask, "test", slab_threshold_bytes=0),
+            generate_dap4_data(
+                ds_dask, "test", slab_threshold_bytes=0, use_checksums=True
+            ),
         )
-        eager_raw = await _collect(generate_dap4_data(ds_numpy, "test"))
+        eager_raw = await _collect(
+            generate_dap4_data(ds_numpy, "test", use_checksums=True),
+        )
 
-        slab_dmr, slab_vars = _parse_dap4_variables(slab_raw)
-        eager_dmr, eager_vars = _parse_dap4_variables(eager_raw)
+        slab_dmr, slab_payload = _parse_dap4_payload(slab_raw)
+        eager_dmr, eager_payload = _parse_dap4_payload(eager_raw)
 
         assert slab_dmr == eager_dmr
-        assert len(slab_vars) == len(eager_vars)
-        for (s_data, s_crc), (e_data, e_crc) in zip(slab_vars, eager_vars):
-            assert s_data == e_data
-            assert s_crc == e_crc
+        assert slab_payload == eager_payload
 
     async def test_dap4_single_chunk_no_slab(self):
         """Single-chunk dask falls through to full-load path (byte-identical)."""
@@ -285,20 +273,27 @@ class TestDap4SlabStreaming:
         assert result == expected
 
     async def test_dap4_crc_valid(self):
-        """Verify CRC32 in slab-streamed response covers the correct data."""
-        ds_dask = _make_dataset(dtype="float64", time_chunks=1, time_size=3)
+        """The slab path's incremental CRC32 covers the variable's data exactly.
+
+        Single data variable, no coords: the payload after the DMR chunk is
+        ``temp_bytes || CRC32(temp_bytes)``, so the checksum can be isolated and
+        recomputed.
+        """
+        data = np.arange(12, dtype="float64").reshape(3, 4)
+        ds_dask = xr.Dataset(
+            {"temp": xr.DataArray(data, dims=["time", "x"])},
+        ).chunk({"time": 1})
+
         slab_raw = await _collect(
-            generate_dap4_data(ds_dask, "test", slab_threshold_bytes=0),
+            generate_dap4_data(
+                ds_dask, "test", slab_threshold_bytes=0, use_checksums=True
+            ),
         )
+        _dmr, payload = _parse_dap4_payload(slab_raw)
 
-        _dmr, variables = _parse_dap4_variables(slab_raw)
-        assert len(variables) > 0
-
-        for data, stored_crc in variables:
-            computed = zlib.crc32(data) & 0xFFFFFFFF
-            assert stored_crc == computed, (
-                f"CRC mismatch: stored={stored_crc:#x}, computed={computed:#x}"
-            )
+        var_data, stored_crc = payload[:-4], struct.unpack("<I", payload[-4:])[0]
+        assert var_data == data.astype("<f8").tobytes()
+        assert stored_crc == zlib.crc32(var_data) & 0xFFFFFFFF
 
     async def test_dap4_byte_array_slab(self):
         """uint8 data var with slab streaming produces identical DAP4 payloads."""
@@ -313,18 +308,17 @@ class TestDap4SlabStreaming:
         ds_numpy = ds.compute()
 
         slab_raw = await _collect(
-            generate_dap4_data(ds, "test", slab_threshold_bytes=0),
+            generate_dap4_data(ds, "test", slab_threshold_bytes=0, use_checksums=True),
         )
-        eager_raw = await _collect(generate_dap4_data(ds_numpy, "test"))
+        eager_raw = await _collect(
+            generate_dap4_data(ds_numpy, "test", use_checksums=True),
+        )
 
-        slab_dmr, slab_vars = _parse_dap4_variables(slab_raw)
-        eager_dmr, eager_vars = _parse_dap4_variables(eager_raw)
+        slab_dmr, slab_payload = _parse_dap4_payload(slab_raw)
+        eager_dmr, eager_payload = _parse_dap4_payload(eager_raw)
 
         assert slab_dmr == eager_dmr
-        assert len(slab_vars) == len(eager_vars)
-        for (s_data, s_crc), (e_data, e_crc) in zip(slab_vars, eager_vars):
-            assert s_data == e_data
-            assert s_crc == e_crc
+        assert slab_payload == eager_payload
 
     async def test_dap4_scalar_no_slab(self):
         """Scalar variable in DAP4 uses full-load path."""
@@ -396,37 +390,37 @@ class TestDaskGraphFastPath:
             ds_numpy = ds_dask.compute()
 
             slab_raw = await _collect(
-                generate_dap4_data(ds_dask, "test", slab_threshold_bytes=0),
+                generate_dap4_data(
+                    ds_dask, "test", slab_threshold_bytes=0, use_checksums=True
+                ),
             )
-            eager_raw = await _collect(generate_dap4_data(ds_numpy, "test"))
+            eager_raw = await _collect(
+                generate_dap4_data(ds_numpy, "test", use_checksums=True),
+            )
 
-            slab_dmr, slab_vars = _parse_dap4_variables(slab_raw)
-            eager_dmr, eager_vars = _parse_dap4_variables(eager_raw)
+            slab_dmr, slab_payload = _parse_dap4_payload(slab_raw)
+            eager_dmr, eager_payload = _parse_dap4_payload(eager_raw)
 
             assert slab_dmr == eager_dmr, f"DMR mismatch for dtype={dtype}"
-            assert len(slab_vars) == len(eager_vars), (
-                f"Variable count mismatch for dtype={dtype}"
-            )
-            for (s_data, s_crc), (e_data, e_crc) in zip(slab_vars, eager_vars):
-                assert s_data == e_data, f"Payload mismatch for dtype={dtype}"
-                assert s_crc == e_crc, f"CRC mismatch for dtype={dtype}"
+            assert slab_payload == eager_payload, f"Payload mismatch for dtype={dtype}"
 
     async def test_dap4_full_variable_dask_graph(self):
         """Default threshold (no forced slab): dask-backed matches numpy via eager fast path."""
         ds_dask = _make_dataset(dtype="float64", time_chunks=3, time_size=3)
         ds_numpy = ds_dask.compute()
 
-        dask_raw = await _collect(generate_dap4_data(ds_dask, "test"))
-        numpy_raw = await _collect(generate_dap4_data(ds_numpy, "test"))
+        dask_raw = await _collect(
+            generate_dap4_data(ds_dask, "test", use_checksums=True),
+        )
+        numpy_raw = await _collect(
+            generate_dap4_data(ds_numpy, "test", use_checksums=True),
+        )
 
-        dask_dmr, dask_vars = _parse_dap4_variables(dask_raw)
-        numpy_dmr, numpy_vars = _parse_dap4_variables(numpy_raw)
+        dask_dmr, dask_payload = _parse_dap4_payload(dask_raw)
+        numpy_dmr, numpy_payload = _parse_dap4_payload(numpy_raw)
 
         assert dask_dmr == numpy_dmr
-        assert len(dask_vars) == len(numpy_vars)
-        for (d_data, d_crc), (n_data, n_crc) in zip(dask_vars, numpy_vars):
-            assert d_data == n_data
-            assert d_crc == n_crc
+        assert dask_payload == numpy_payload
 
 
 class TestSlabFallbackPaths:
@@ -604,13 +598,16 @@ class TestDatetimeHandling:
         ds_dask = _make_datetime_dataset()
         ds_numpy = ds_dask.compute()
 
-        dask_raw = await _collect(generate_dap4_data(ds_dask, "test"))
-        eager_raw = await _collect(generate_dap4_data(ds_numpy, "test"))
+        dask_raw = await _collect(
+            generate_dap4_data(ds_dask, "test", use_checksums=True),
+        )
+        eager_raw = await _collect(
+            generate_dap4_data(ds_numpy, "test", use_checksums=True),
+        )
 
-        _dask_dmr, dask_vars = _parse_dap4_variables(dask_raw)
-        _eager_dmr, eager_vars = _parse_dap4_variables(eager_raw)
+        _dask_dmr, dask_payload = _parse_dap4_payload(dask_raw)
+        _eager_dmr, eager_payload = _parse_dap4_payload(eager_raw)
 
-        assert len(dask_vars) == len(eager_vars)
-        for (d_data, d_crc), (e_data, e_crc) in zip(dask_vars, eager_vars):
-            assert d_data == e_data, "Variable payload mismatch"
-            assert d_crc == e_crc, "CRC mismatch"
+        # Compare data payloads only — the DMR mismatch is a pre-existing
+        # datetime DMR generation issue, unrelated to the dask-graph fast path.
+        assert dask_payload == eager_payload

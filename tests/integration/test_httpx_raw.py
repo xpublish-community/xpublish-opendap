@@ -106,7 +106,14 @@ class TestDAP4Raw:
         assert xdap == "4.0"
 
     def test_dap4_data_starts_with_dmr(self, opendap_base):
-        """DAP4 .dap response body starts with XML declaration (DMR preamble)."""
+        """DAP4 .dap response body starts with the DMR chunk (header + XML)."""
         r = httpx.get(f"{opendap_base}.dap")
-        # The binary response begins with a DMR XML section
-        assert r.content[:5] == b"<?xml"
+        # The whole .dap body is a chunked stream: the DMR is the leading
+        # CHUNK_DATA chunk, so a 4-byte chunk header precedes the XML.
+        import struct
+
+        from xpublish_opendap.dap.dap4.data import CHUNK_SIZE_MASK
+
+        size = struct.unpack(">I", r.content[0:4])[0] & CHUNK_SIZE_MASK
+        dmr_chunk = r.content[4 : 4 + size]
+        assert dmr_chunk[:5] == b"<?xml"
