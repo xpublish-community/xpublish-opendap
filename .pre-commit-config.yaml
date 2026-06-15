@@ -17,10 +17,13 @@ repos:
     rev: v1.19.1
     hooks:
       - id: mypy
-        exclude: docs/source/conf.py
-        args: [--ignore-missing-imports]
+        exclude: (docs/source/conf\.py|benchmarks/|noxfile\.py)
         additional_dependencies:
           - types-PyYAML
+          - numpy
+          - xarray
+          - fastapi
+          - pydantic
 
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1

@@ -1,4 +1,4 @@
-# ruff: noqa: D100,D103,PLR2004
+# ruff: noqa: D100,D101,D102,D103,PLR2004
 import pytest
 import xpublish
 from fastapi.testclient import TestClient
