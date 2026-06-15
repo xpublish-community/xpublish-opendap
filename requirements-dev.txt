@@ -1,5 +1,6 @@
 black
 check-manifest
+dask
 doctr
 h5netcdf
 h5pyd
