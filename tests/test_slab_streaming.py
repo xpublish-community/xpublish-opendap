@@ -228,7 +228,10 @@ class TestDap4SlabStreaming:
 
         slab_raw = await _collect(
             generate_dap4_data(
-                ds_dask, "test", slab_threshold_bytes=0, use_checksums=True
+                ds_dask,
+                "test",
+                slab_threshold_bytes=0,
+                use_checksums=True,
             ),
         )
         eager_raw = await _collect(
@@ -250,7 +253,10 @@ class TestDap4SlabStreaming:
 
         slab_raw = await _collect(
             generate_dap4_data(
-                ds_dask, "test", slab_threshold_bytes=0, use_checksums=True
+                ds_dask,
+                "test",
+                slab_threshold_bytes=0,
+                use_checksums=True,
             ),
         )
         eager_raw = await _collect(
@@ -286,7 +292,10 @@ class TestDap4SlabStreaming:
 
         slab_raw = await _collect(
             generate_dap4_data(
-                ds_dask, "test", slab_threshold_bytes=0, use_checksums=True
+                ds_dask,
+                "test",
+                slab_threshold_bytes=0,
+                use_checksums=True,
             ),
         )
         _dmr, payload = _parse_dap4_payload(slab_raw)
@@ -391,7 +400,10 @@ class TestDaskGraphFastPath:
 
             slab_raw = await _collect(
                 generate_dap4_data(
-                    ds_dask, "test", slab_threshold_bytes=0, use_checksums=True
+                    ds_dask,
+                    "test",
+                    slab_threshold_bytes=0,
+                    use_checksums=True,
                 ),
             )
             eager_raw = await _collect(
