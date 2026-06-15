@@ -43,6 +43,83 @@ from xpublish_opendap.errors import DapError, RequestTooLargeError
 logger: logging.Logger = logging.getLogger("xpublish_opendap")
 
 
+def _extract_constraint(request: Request) -> str:
+    """Extract the constraint expression from the request URL query."""
+    query = request.url.query or ""
+    return unquote(query)
+
+
+def _parse_constraint(raw: str) -> Constraint:
+    """Parse a raw constraint string into a Constraint object."""
+    if not raw:
+        return Constraint()
+    return parse_dap2_constraint(raw)
+
+
+def _dap2_headers(response_type: str) -> dict[str, str]:
+    """Build DAP2 response headers."""
+    headers = dict(DAP2_HEADERS)
+    if response_type in CONTENT_DESCRIPTIONS:
+        headers["Content-Description"] = CONTENT_DESCRIPTIONS[response_type]
+    return headers
+
+
+def _error_response(error: DapError, status_code: int = 400) -> Response:
+    """Build a DAP2 error response."""
+    body = "".join(generate_error(error.code, error.message))
+    return Response(
+        content=body,
+        media_type=CONTENT_TYPES["error"],
+        status_code=status_code,
+        headers=_dap2_headers("error"),
+    )
+
+
+def _dap4_response_headers() -> dict[str, str]:
+    """Build DAP4 response headers."""
+    return dict(DAP4_HEADERS)
+
+
+def _dap4_error_response(error: DapError, status_code: int = 400) -> Response:
+    """Build a DAP4 error response."""
+    body = generate_dap4_error(error.code, error.message, http_code=status_code)
+    return Response(
+        content=body,
+        media_type=DAP4_CONTENT_TYPES["error"],
+        status_code=status_code,
+        headers=_dap4_response_headers(),
+    )
+
+
+def _extract_dap4_constraint(request: Request) -> str:
+    """Extract the DAP4 CE from the dap4.ce query parameter."""
+    params = parse_qs(request.url.query or "")
+    ce_values = params.get("dap4.ce", [])
+    return ce_values[0] if ce_values else ""
+
+
+def _parse_dap4_constraint(raw: str) -> Constraint:
+    """Parse a raw DAP4 constraint string into a Constraint object."""
+    if not raw:
+        return Constraint()
+    return parse_dap4_constraint(raw)
+
+
+def _extract_dap4_checksums(request: Request) -> bool:
+    """Whether the client requested DAP4 checksums (dap4.checksum=true).
+
+    DAP4 checksums are negotiated per request: a client that wants a CRC32
+    after each variable opts in with ``dap4.checksum=true`` and then reads
+    those 4 bytes. Without the parameter, no checksums are sent (the libdap4
+    default). netcdf-c omits the parameter by default; pydap sends
+    ``dap4.checksum=true``. Emitting checksums a client did not request
+    misaligns its read of every subsequent variable.
+    """
+    params = parse_qs(request.url.query or "")
+    values = params.get("dap4.checksum", [])
+    return bool(values) and values[0].lower() == "true"
+
+
 class OpenDapPlugin(Plugin):  # type: ignore[misc]  # xpublish untyped
     """OpenDAP plugin for xpublish."""
 
@@ -66,74 +143,6 @@ class OpenDapPlugin(Plugin):  # type: ignore[misc]  # xpublish untyped
         )
 
         config = self
-
-        def _extract_constraint(request: Request) -> str:
-            """Extract the constraint expression from the request URL query."""
-            query = request.url.query or ""
-            return unquote(query)
-
-        def _parse_constraint(raw: str) -> Constraint:
-            """Parse a raw constraint string into a Constraint object."""
-            if not raw:
-                return Constraint()
-            return parse_dap2_constraint(raw)
-
-        def _dap2_headers(response_type: str) -> dict[str, str]:
-            """Build DAP2 response headers."""
-            headers = dict(DAP2_HEADERS)
-            if response_type in CONTENT_DESCRIPTIONS:
-                headers["Content-Description"] = CONTENT_DESCRIPTIONS[response_type]
-            return headers
-
-        def _error_response(error: DapError, status_code: int = 400) -> Response:
-            """Build a DAP2 error response."""
-            body = "".join(generate_error(error.code, error.message))
-            return Response(
-                content=body,
-                media_type=CONTENT_TYPES["error"],
-                status_code=status_code,
-                headers=_dap2_headers("error"),
-            )
-
-        def _dap4_response_headers() -> dict[str, str]:
-            """Build DAP4 response headers."""
-            return dict(DAP4_HEADERS)
-
-        def _dap4_error_response(error: DapError, status_code: int = 400) -> Response:
-            """Build a DAP4 error response."""
-            body = generate_dap4_error(error.code, error.message, http_code=status_code)
-            return Response(
-                content=body,
-                media_type=DAP4_CONTENT_TYPES["error"],
-                status_code=status_code,
-                headers=_dap4_response_headers(),
-            )
-
-        def _extract_dap4_constraint(request: Request) -> str:
-            """Extract the DAP4 CE from the dap4.ce query parameter."""
-            params = parse_qs(request.url.query or "")
-            ce_values = params.get("dap4.ce", [])
-            return ce_values[0] if ce_values else ""
-
-        def _parse_dap4_constraint(raw: str) -> Constraint:
-            """Parse a raw DAP4 constraint string into a Constraint object."""
-            if not raw:
-                return Constraint()
-            return parse_dap4_constraint(raw)
-
-        def _extract_dap4_checksums(request: Request) -> bool:
-            """Whether the client requested DAP4 checksums (dap4.checksum=true).
-
-            DAP4 checksums are negotiated per request: a client that wants a
-            CRC32 after each variable opts in with ``dap4.checksum=true`` and
-            then reads those 4 bytes. Without the parameter, no checksums are
-            sent (the libdap4 default). netcdf-c omits the parameter by default;
-            pydap sends ``dap4.checksum=true``. Emitting checksums a client did
-            not request misaligns its read of every subsequent variable.
-            """
-            params = parse_qs(request.url.query or "")
-            values = params.get("dap4.checksum", [])
-            return bool(values) and values[0].lower() == "true"
 
         @router.get(".dds")
         async def dds_response(
